@@ -28,6 +28,7 @@ class LuaCheckResult:
     warnings: list[LuaIssue]
 
 
+
 def _parse_luacheck_output(output: str) -> tuple[list[LuaIssue], list[LuaIssue]]:
     errors: list[LuaIssue] = []
     warnings: list[LuaIssue] = []
@@ -144,8 +145,8 @@ if __name__ == "__main__":
     errors, warnings = _parse_luacheck_output(output)
     print("Errors:")
     for error in errors:
-        print(f"- {error.type}: {error.message}")
+        print(f"- {error.type}: {error.message}, line {error.line}, column {error.column}")
 
     print("\nWarnings:")
     for warning in warnings:
-        print(f"- {warning.type}: {warning.message}")
+        print(f"- {warning.type}: {warning.message}, line {warning.line}, column {warning.column}")
