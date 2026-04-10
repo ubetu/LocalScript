@@ -1,4 +1,4 @@
-from ollama import AsyncClient
-from .config import OLLAMA_HOST
+from langchain_ollama import ChatOllama
+from .config import OLLAMA_BASE_URL, OLLAMA_MODEL
 
-ollama_client = AsyncClient(host=OLLAMA_HOST)
+ollama_client = ChatOllama(base_url=OLLAMA_BASE_URL, model=OLLAMA_MODEL)
