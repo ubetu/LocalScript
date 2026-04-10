@@ -1,22 +1,24 @@
 from pydantic import BaseModel, Field
 from langgraph.graph import MessagesState
 from enum import StrEnum
+from .lua_utils import LuaCheckResult
+from .lua_tests import TestSuiteResult
 
 class State(MessagesState):
-    questions: list[str] | None
-    answer: str | None
     plan: str
     code: str
-    tests: list[str]
+    test: TestSchema
+    linter_result: LuaCheckResult
+    test_result: TestSuiteResult | None
 
 
 # TODO: improve it
 class QuestionsSchema(BaseModel):
     questions: list[str] | None = Field(description="Questions that you want to ask.")
 
-class TestsSchema(BaseModel):
-    tests: list[str] = Field(description="Your tests to check the plan implementation")
-
+class TestSchema(BaseModel):
+    input: str = Field()
+    output: str = Field()
 
 
 class MessageRequest(BaseModel):
