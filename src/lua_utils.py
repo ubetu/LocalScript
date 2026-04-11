@@ -100,7 +100,7 @@ def _parse_luacheck_output(output: str) -> tuple[list[LuaIssue], list[LuaIssue]]
     return errors, warnings
 
 
-async def run_luacheck(code: str, config_path: str) -> LuaCheckResult:
+async def run_luacheck(code: str, config_path: str = "resources/luacheckrc.lua") -> LuaCheckResult:
     # TODO:Handle subprocess errors and timeouts
     proc = await asyncio.create_subprocess_exec(
         "luacheck",
