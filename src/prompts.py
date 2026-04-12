@@ -29,34 +29,60 @@ Rules:
  
  
 # ──────────────────────────────────────────────
-# Extract
+# Extract: case 1 — first request, no questions
 # ──────────────────────────────────────────────
  
 EXTRACT_PROMPT = """\
-You are a parser. Extract structured information from user messages about Lua scripts.
+You are a parser. Extract structured information from a user request about a Lua script.
  
-The user messages may contain:
+The user request may contain:
 1. A task description in natural language (always present)
 2. A JSON context with variables under wf.vars or wf.initVariables (sometimes absent)
 3. Existing Lua code that needs modification (sometimes present)
  
-Rules:
-- Copy the JSON context exactly as provided. Do not modify, simplify or reformat it.
-- If there is existing Lua code that the user wants to modify or extend, \
-extract it into existing_code.
-- If the user asks to write new code from scratch, existing_code is null.
-- If no JSON context is provided, test_input is null.
-- Do not solve the task. Only extract."""
+Return:
+- task: copy the task description exactly as the user wrote it, \
+without the JSON context and without the code.
+- context: the JSON context exactly as provided. Null if absent.
+- code: existing Lua code the user wants to modify. Null if the user \
+asks to write new code.
+ 
+Do not solve the task. Only extract."""
  
  
 # ──────────────────────────────────────────────
-# Ask: two variants
+# Extract: case 2 — first request, after Q&A
 # ──────────────────────────────────────────────
  
-# Variant 1: extract found missing info (test_input is None, etc.)
-# {missing_description} is filled programmatically, e.g.:
-#   "- JSON context with wf.vars is missing"
-#   "- The user mentions modifying code, but no code was provided"
+EXTRACT_AFTER_ASK_PROMPT = """\
+You are a parser. The user was asked clarifying questions and has answered them. \
+Combine the original request and the answers into a complete task description.
+ 
+Return:
+- task: a single clear task description that includes all relevant \
+information from the conversation. Write it as if the user said it in one message.
+- context: the JSON context exactly as provided. Null if absent.
+- code: existing Lua code the user wants to modify. Null if the user \
+asks to write new code.
+ 
+Do not solve the task. Only extract and reformulate.
+ 
+Example conversation:
+User: Добавь переменную с квадратом числа
+AI: 1. Какого числа? 2. Предоставьте существующий код.
+User: Числа 5, код: return tonumber('5')
+Result task: Добавь переменную с квадратом числа 5
+ 
+Example conversation:
+User: Отфильтруй массив по полю
+AI: 1. По какому полю? 2. Какое условие фильтрации?
+User: По полю status, оставить только active
+Result task: Отфильтруй массив, оставив только элементы со значением status равным active"""
+ 
+ 
+# ──────────────────────────────────────────────
+# Ask
+# ──────────────────────────────────────────────
  
 ASK_MISSING_PROMPT = """\
 The user request is missing critical information.
@@ -68,8 +94,6 @@ Ask the user to provide the missing information.
 Ask in the same language as the user's request.
 Be brief and specific. Ask only about what is missing, nothing else."""
  
- 
-# Variant 2: extract succeeded, but the task might be ambiguous.
  
 ASK_CLARIFY_PROMPT = """\
 You analyze Lua script requests for completeness.
@@ -103,13 +127,11 @@ You are a Lua programmer.
  
 {_CODE_RESPONSE_FORMAT}
  
-The user message contains:
-- A task description
-- A JSON context after "Context:" with variables available at runtime
+The user message contains a task description followed by a JSON context.
  
 Example:
  
-User: Из полученного списка email получи последний.
+Task: Из полученного списка email получи последний.
 Context: {{"wf":{{"vars":{{"emails":["user1@example.com","user2@example.com","user3@example.com"]}}}}}}
  
 ANALYSIS:
@@ -122,7 +144,7 @@ return wf.vars.emails[#wf.vars.emails]
  
 Example:
  
-User: Отфильтруй элементы из массива, чтобы включить только те, \
+Task: Отфильтруй элементы из массива, чтобы включить только те, \
 у которых есть значения в полях Discount или Markdown.
 Context: {{"wf":{{"vars":{{"parsedCsv":[\
 {{"SKU":"A001","Discount":"10%","Markdown":""}},\
@@ -157,11 +179,7 @@ You are a Lua programmer.
  
 {_PLATFORM_RULES}
  
-The user message contains:
-- A task description explaining what to change
-- A JSON context after "Context:" with variables available at runtime
-- Existing Lua code after "Existing code:" that needs modification
- 
+The user message contains a task, a JSON context, and existing code to modify.
 Preserve the existing logic. Add or change only what is requested.
 Do not rewrite or restructure working parts of the code.
 Return the COMPLETE modified code, not just the changes.
@@ -178,12 +196,8 @@ You are a Lua programmer.
  
 {_PLATFORM_RULES}
  
-The user message contains:
-- A task description
-- A JSON context after "Context:" with variables available at runtime
-- Your previous code after "Previous code:" that has errors
-- Error details after "Linter errors:" and/or "Runtime error:"
- 
+The user message contains a task, a JSON context, your previous code, \
+and error details.
 Fix only the reported errors.
 Change as little as possible. Do not rewrite the entire code.
  

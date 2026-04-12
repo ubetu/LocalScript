@@ -4,9 +4,10 @@ from enum import StrEnum
 from .lua_utils import LuaCheckResult
 
 class State(MessagesState):
-    code: str
+    code: str | None
     linter_result: LuaCheckResult
-    task_entities: TaskEntities
+    task: str
+    possile_input: str | None
 
 # TODO: improve it
 class QuestionsSchema(BaseModel):
@@ -14,7 +15,7 @@ class QuestionsSchema(BaseModel):
 
 class TaskEntities(BaseModel):
     task: str
-    context: str | None = None
+    possible_input: str | None = None
     code: str | None = None
 
 
