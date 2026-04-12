@@ -4,92 +4,95 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import interrupt, Command
 
 from .schema import (
-    State, QuestionsSchema, TestSchema
+    State, QuestionsSchema, TaskEntities
 )
-from .config import (
-    QUESTIONS_PROMPT, PLAN_PROMPT, CODER_PROMPT, TESTER_PROMPT
+from .prompts import (
+    ASK_MISSING_PROMPT, ASK_CLARIFY_PROMPT, EXTRACT_PROMPT, GENERATE_CODE_PROMPT, MODIFY_CODE_PROMPT, FIX_CODE_PROMPT
 )
 from .client import llm_client
-from .lua_utils import run_luacheck, LuaCheckResult
-from .lua_tests import run_tests, TestCase, TestSuiteResult
 
 
 def build_graph() -> CompiledStateGraph:
-    async def ask(state: State) -> dict:
-        response = await llm_client.with_structured_output(QuestionsSchema).ainvoke([SystemMessage(QUESTIONS_PROMPT), *state['messages']])
+    
+    async def extract(state: State) -> dict:
+        response = await llm_client.with_structured_output(TaskEntities).ainvoke(
+            [SystemMessage(EXTRACT_PROMPT), *state['messages']]
+        )
+        assert isinstance(response, TaskEntities)
+
+        return {"task_entities": response}
+
+    async def _ask(state: State, system_prompt: str) -> dict:
+        response = await llm_client.with_structured_output(QuestionsSchema).ainvoke(
+            [SystemMessage(system_prompt), *state['messages']]
+        )
+
         assert isinstance(response, QuestionsSchema)
+
         if response.questions:
-            answer = interrupt(response.questions)
-            return {"messages": [response, HumanMessage(answer)]}
+            response_str = "\n".join(f"{i}. {q}" for i, q in enumerate(response.questions, 1))
+            answer = interrupt(response_str)
+            return {"messages": [AIMessage(response_str), HumanMessage(answer)]}
         else:
             return {}
+        
 
+    async def ask_to_clarify(state: State) -> dict:
+        return await _ask(state, ASK_CLARIFY_PROMPT)
     
-    async def plan(state: State) -> dict:
-        messages = [SystemMessage(PLAN_PROMPT), *state['messages']]
-        response = await llm_client.ainvoke(messages)
-        return {"plan": response.content}
-    
-    async def add_tests(state: State) -> dict:
-        response = await llm_client.with_structured_output(TestSchema).ainvoke([SystemMessage(TESTER_PROMPT), AIMessage(f"План: {state['plan']}")])
-        assert isinstance(response, TestSchema)
-        return {"tests": response}
-    
-    def format_linter_result(linter_result: LuaCheckResult):
-        pass #TODO: implement
+    async def ask_missing_info(state: State) -> dict:
+        missing = "- JSON context with input variables (wf.vars or wf.initVariables) is not provided"
+        system_prompt = ASK_MISSING_PROMPT.format(missing_description=missing)
+        return await _ask(state, system_prompt)
 
-    def format_test_result(test_result: TestSuiteResult):
-        pass #TODO: implement
+    def _parse_code(text: str) -> str:
+        return '' #TODO: implement
     
-    async def code(state: State) -> dict:
-        messages = [SystemMessage(CODER_PROMPT), AIMessage(f"План: {state['plan']}")]
-        if state["linter_result"] and not state["linter_result"]:
-            messages.append(format_linter_result(state["linter_result"]))
-        elif state["test_result"] and state["test_result"].passed != state["test_result"].total:
-            messages.append(format_test_result(state["test_result"]))
-
-        response = await llm_client.ainvoke(messages)
-        return {"code": response}
-    
-    async def test(state: State) -> Command:
-        linter_result = await run_luacheck(
-            state['code'], 'whatisconfig?' #TODO: add config
+    async def _code(state: State,  system_prompt: str) -> dict:        
+        response = await llm_client.ainvoke(
+            [SystemMessage(system_prompt), *state['messages']]
         )
-        update = {'linter_result': linter_result, 'test_result': None}
-        if not linter_result.passed:
-            return Command(update=update, goto='code')
 
-        #TODO: maybe we have only one test case
-        test_result = await run_tests([
-            TestCase(
-                name="", #TODO: remove name from test cases
-                code=state["code"],
-                context_json=state["test"].input,
-                expected_lua=state["test"].output
-            )
-        ])
+        assert isinstance(response.content, str)
 
-        update['test_result'] = test_result
-        if test_result.passed != test_result.total:
-            return Command(update=update, goto='code')
-        return Command(goto=END)
+        code = _parse_code(response.content)
+        return {"code": code}
+    
 
+    async def generate_code (state: State) -> dict:
+        return await _code(state, GENERATE_CODE_PROMPT)
+    
+    async def modify_code (state: State) -> dict:
+        return await _code(state, MODIFY_CODE_PROMPT) #TODO: fromat prompt
+    
+    async def fix_code (state: State) -> dict:
+        return await _code(state, FIX_CODE_PROMPT) #TODO: fromat prompt
+
+    async def test(state: State) -> dict:
+        # TODO: impement it
+        return {}
 
 
 
 
     builder = StateGraph(State)
-    builder.add_node("ask", ask)
-    builder.add_node("plan", plan)
-    builder.add_node("add_tests", add_tests)
-    builder.add_node("code", code)
+    builder.add_node("extract", extract)
+    builder.add_node("extract_after_missing_info", extract)
+    builder.add_node("ask_missing_info", ask_missing_info)
+    builder.add_node("ask_to_clarify", ask_to_clarify)
+    builder.add_node("generate_code", generate_code)
+    builder.add_node("modify_code", modify_code)
+    builder.add_node("fix_code",  fix_code)
     builder.add_node("test", test)
 
-    builder.add_edge(START, "ask")
-    builder.add_edge("ask", "plan")
-    builder.add_edge("plan", "add_tests")
-    builder.add_edge("add_tests", "code")
-    builder.add_edge("code", "test")
+    builder.add_edge(START, "extract")
+    builder.add_conditional_edges("extract", lambda state: state['task_entities'].context is None, {True: "ask_missing_info", False: "ask_to_clarify"})
+    builder.add_edge("ask_missing_info", "extract_after_missing_info")
+    builder.add_edge("extract_after_missing_info", "ask_to_clarify")
+    builder.add_conditional_edges("ask_to_clarify", lambda state: state['task_entities'].code is None, {True:"generate_code", False: "modify_code"})
+    builder.add_edge("generate_code", "test")
+    builder.add_edge("modify_code", "test")
+    builder.add_edge("fix_code", "test")
 
     return builder.compile()
 
