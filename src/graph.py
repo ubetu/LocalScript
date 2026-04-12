@@ -140,9 +140,13 @@ def build_graph() -> CompiledStateGraph:
         if linter_result.passed:
             return Command(goto=END)
         return Command(update={"linter_result": linter_result}, goto="fix_code")
+    
+    def format_code(state: State) -> str:
+        # TODO: fromat code in json format
+        return state["code"] # type: ignore
 
 
-
+    # TODO: if user send existing code, it can be in json format, we want to convert it into common form
     builder = StateGraph(State)
     builder.add_node("first_extract", first_extract)
     builder.add_node("extract_after_QA", extract_after_QA)
