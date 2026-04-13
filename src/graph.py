@@ -4,8 +4,10 @@ from functools import wraps
 
 from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.state import CompiledStateGraph
+from langgraph.errors import GraphInterrupt
 from langgraph.types import interrupt, Command
 
 from .schema import State, QuestionsSchema, TaskEntities
@@ -91,6 +93,8 @@ def _repeat(times: int, fallback=lambda _: dict()):
                 try:
                     result = await func(*args, **kwargs)
                     return result
+                except GraphInterrupt:
+                    raise
                 except Exception as e:
                     logger.warning(
                         f"{func.__name__}: attempt {attempt}/{times} failed ({type(e).__name__}: {e})"
@@ -310,7 +314,7 @@ def build_graph() -> CompiledStateGraph:
     builder.add_edge("ask_to_clarify", "extract_after_QA")
     builder.add_conditional_edges(
         "extract_after_QA",
-        lambda state: state.code is None,
+        lambda state: state.get("code") is None,
         {True: "generate_code", False: "modify_code"},
     )
     builder.add_edge("generate_code", "test")
@@ -318,7 +322,14 @@ def build_graph() -> CompiledStateGraph:
     builder.add_edge("fix_code", "test")
     builder.add_edge("format_code", END)
 
-    return builder.compile(checkpointer=MemorySaver())
+    serde = JsonPlusSerializer(allowed_msgpack_modules=[
+        ("src.lua.lua_utils", "LuaIssueSeverity"),
+        ("src.lua.lua_utils", "LuaIssueMessage"),
+        ("src.lua.lua_utils", "LuaIssue"),
+        ("src.lua.lua_utils", "LuaCheckResult"),
+        ("src.lua.lua_tests", "LuaRunResult"),
+    ])
+    return builder.compile(checkpointer=MemorySaver(serde=serde))
 
 
 graph = build_graph()
