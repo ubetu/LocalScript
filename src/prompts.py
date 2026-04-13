@@ -6,10 +6,16 @@ You return raw Lua code only, without the lua{...}lua wrapper.
 - All declared workflow variables are in wf.vars
 - Startup variables (from the variables input) are in wf.initVariables
 - Do not use JsonPath. Access data directly: wf.vars.myVar
-- Create new arrays with _utils.array.new()
-- Mark existing variables as arrays with _utils.array.markAsArray(arr)
+- The ONLY available _utils methods are:
+  - _utils.array.new() — create a new empty array
+  - _utils.array.markAsArray(arr) — mark an existing table as an array for JSON serialization
+- No other _utils methods or submodules exist (no _utils.date, _utils.string, etc.). \
+Do not invent _utils methods.
+- To check if a value is an array (not a dict-table), inspect whether its keys \
+are sequential integers (e.g. for k in pairs(t): type(k) ~= "number" means it is not an array).
 - Allowed constructs: if/then/else, while/do/end, for/do/end, repeat/until
-- Do not use os, io, require, loadstring, dofile, load, pcall"""
+- Do not use os, io, require, loadstring, dofile, load, pcall. \
+os.time() and os.date() are NOT available."""
  
 _CODE_RESPONSE_FORMAT = """\
 You must respond in this exact format:
@@ -113,7 +119,11 @@ Do not ask about:
 - Edge cases or error handling
 - Code style or variable naming
 - Performance considerations
- 
+- Specific values when the task can use a reasonable example/placeholder (e.g., \
+use 5 or 10 for a number if no number is specified)
+
+If the task can be completed with a reasonable assumption, prefer making \
+that assumption over asking.
 If the request is clear, return an empty list.
 Most requests are self-contained. Default to asking nothing.
 Ask in the same language as the user's request."""
@@ -171,6 +181,28 @@ or (item.Markdown ~= "" and item.Markdown ~= nil) then
 end
 return result
 ```
+Example:
+
+Task: Для полученных данных очисти значения переменных ID, ENTITY_ID, CALL
+Context: {{"wf":{{"vars":{{"RESTbody":{{"result":[{{"ID":123,"ENTITY_ID":456,"CALL":"x","OTHER":"v"}}]}}}}}}}}
+
+ANALYSIS:
+"Очисти значения переменных X, Y, Z" means keep only fields X, Y, Z and set all \
+other fields to nil.
+
+CODE:
+```lua
+local result = wf.vars.RESTbody.result
+for _, item in pairs(result) do
+    for key, _ in pairs(item) do
+        if key ~= "ID" and key ~= "ENTITY_ID" and key ~= "CALL" then
+            item[key] = nil
+        end
+    end
+end
+return result
+```
+
 YOU SHOULD NOT MODIFY THE `wf.vars` or `wf.initVariables`.
 If task asks to modify the. You should instead return the new value, WITHOUT modifying the existing variables.
 Example:
