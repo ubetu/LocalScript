@@ -18,9 +18,7 @@ from .prompts import (
     EXTRACT_AFTER_ASK_PROMPT,
 )
 from .client import llm_client
-from .lua.lua_parser import run_luacheck
-from .lua.lua_utils import LuaCheckResult, wrap_lua_code
-from .lua.lua_tests import LuaRunResult, run_lua
+from .lua import LuaCheckResult, LuaRunResult, run_lua, run_luacheck, wrap_lua_code
 
 logger = logging.getLogger(__name__)
 

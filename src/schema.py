@@ -1,8 +1,7 @@
 from pydantic import BaseModel
 from langgraph.graph import MessagesState
 from enum import StrEnum
-from .lua.lua_utils import LuaCheckResult
-from .lua.lua_tests import LuaRunResult
+from .lua import LuaCheckResult, LuaRunResult
 
 class State(MessagesState):
     code: str | None
