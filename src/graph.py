@@ -21,8 +21,9 @@ MAX_FIX_TRIES = 5
 
 def build_user_message(
     task: str, possible_input: str | None, code: str | None = None,
-    linter_result: LuaCheckResult | None = None,
+    linter_result: LuaCheckResult | None = None
 ) -> str:
+    """Build user message for code nodes of the graph. All inputs should be getted from the state."""
     parts = [f"Task: {task}"]
     if possible_input:
         parts.append(f"Possible input:\n{possible_input}")
@@ -42,6 +43,7 @@ def build_user_message(
     return "\n\n".join(parts)
 
 def _parse_code(text: str) -> str:
+    """Parse code from the analysis-code shama (check prompts)."""
     # TODO: here we can return that text format is incorrect
     match = re.search(r"```lua\s*\n(.*?)```", text, re.DOTALL)
     if match:
@@ -52,9 +54,10 @@ def _parse_code(text: str) -> str:
         if match:
             return match.group(1).strip()
         return after.strip()
-    return text.strip()
+    raise RuntimeError()
 
-def _repeat(times: int, fallback_factory=lambda _: dict()):
+def _repeat(times: int, fallback=lambda _: dict()):
+    """Call a function *times* times while it raises errors. If after that the function still produces errors, calls fallback"""
     def decorator_repeat(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -64,7 +67,7 @@ def _repeat(times: int, fallback_factory=lambda _: dict()):
                     return result
                 except Exception:
                     pass
-            return fallback_factory(*args)
+            return fallback(*args)
         return wrapper
     return decorator_repeat
 
@@ -85,15 +88,18 @@ def build_graph() -> CompiledStateGraph:
             "fix_attempts": 0,
         }
     
-    @_repeat(times=6, fallback_factory=lambda state, _: {"task" : state["messages"]})
+    @_repeat(times=6, fallback=lambda state, _: {"task" : state["messages"]})
     async def first_extract(state: State) -> dict:
+        """Extracts info from a first message"""
         return await _extract(state, EXTRACT_PROMPT)
     
     @_repeat(times=3)
     async def extract_after_QA(state: State) -> dict:
+        """Extracts info after QA but only in a first session"""
         return await _extract(state, EXTRACT_AFTER_ASK_PROMPT)
     
     def extract_next_round(state: State) -> dict:
+        """Extracts info from next rouns"""
         return {"task": state["messages"][-1].content}
     
     # QA
@@ -136,7 +142,7 @@ def build_graph() -> CompiledStateGraph:
     
 
     @_repeat(times=10)
-    async def generate_code (state: State) -> dict:
+    async def generate_code(state: State) -> dict:
         user_message = build_user_message(
             task=state["task"],
             possible_input=state["possile_input"],
@@ -146,7 +152,7 @@ def build_graph() -> CompiledStateGraph:
         return code_result
     
     @_repeat(times=6)
-    async def modify_code (state: State) -> dict:
+    async def modify_code(state: State) -> dict:
         user_message = build_user_message(
             task=state["task"],
             possible_input=state["possile_input"],
@@ -157,7 +163,7 @@ def build_graph() -> CompiledStateGraph:
         return code_result
     
     @_repeat(times=6)
-    async def fix_code (state: State) -> dict:
+    async def fix_code(state: State) -> dict:
         user_message = build_user_message(
             task=state["task"],
             possible_input=state["possile_input"],
