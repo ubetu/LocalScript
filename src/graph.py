@@ -3,6 +3,7 @@ import re
 from functools import wraps
 
 from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
+from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import interrupt, Command
@@ -190,7 +191,7 @@ def build_graph() -> CompiledStateGraph:
         logger.debug("entering generate_code")
         user_message = build_user_message(
             task=state["task"],
-            possible_input=state["possile_input"],
+            possible_input=state["possible_input"],
         )
         code_result = await _code(GENERATE_CODE_PROMPT, user_message)
         code_result["fix_attempts"] = 0
@@ -201,7 +202,7 @@ def build_graph() -> CompiledStateGraph:
         logger.debug("entering modify_code")
         user_message = build_user_message(
             task=state["task"],
-            possible_input=state["possile_input"],
+            possible_input=state["possible_input"],
             code=state["code"],
         )
         code_result = await _code(MODIFY_CODE_PROMPT, user_message)
@@ -213,7 +214,7 @@ def build_graph() -> CompiledStateGraph:
         logger.info(f"entering fix_code, fix_attempts={state.get('fix_attempts', 0)}")
         user_message = build_user_message(
             task=state["task"],
-            possible_input=state["possile_input"],
+            possible_input=state["possible_input"],
             code=state["code"],
             static_result=state["static_result"],
             dynamic_result=state["dynamic_result"],
@@ -229,9 +230,9 @@ def build_graph() -> CompiledStateGraph:
             pass
 
         dynamic_result = None
-        if state["possile_input"] is not None:
+        if state["possible_input"] is not None:
             try:
-                dynamic_result = await run_lua(state["code"], state["possile_input"])  # type: ignore
+                dynamic_result = await run_lua(state["code"], state["possible_input"])  # type: ignore
             except Exception:
                 pass
 
@@ -273,14 +274,14 @@ def build_graph() -> CompiledStateGraph:
             goto="fix_code",
         )
 
-    def format_code(state: State) -> str:
+    def format_code(state: State) -> dict:
         logger.info(
             f"format_code: formatting output, code length={len(state['code'])} chars" # type: ignore
         )
-        key=state.get("json_key", "result")
-        code = wrap_lua_code(key, state['code'])  # type: ignore
-        logger.info(f"format code: new code is {code}")
-        return code
+        key = state.get("json_key") or "result"
+        formatted = wrap_lua_code(key, state['code'])  # type: ignore
+        logger.info(f"format_code: output={formatted}")
+        return {"formatted_output": formatted}
 
     # TODO: if user send existing code, it can be in json format, we want to convert it into common form
     builder = StateGraph(State)
@@ -302,7 +303,7 @@ def build_graph() -> CompiledStateGraph:
     )
     builder.add_conditional_edges(
         "first_extract",
-        lambda state: state.possile_input is None,
+        lambda state: state.get("possible_input") is None,
         {True: "ask_missing_info", False: "ask_to_clarify"},
     )
     builder.add_edge("ask_missing_info", "ask_to_clarify")
@@ -317,7 +318,7 @@ def build_graph() -> CompiledStateGraph:
     builder.add_edge("fix_code", "test")
     builder.add_edge("format_code", END)
 
-    return builder.compile()
+    return builder.compile(checkpointer=MemorySaver())
 
 
 graph = build_graph()
