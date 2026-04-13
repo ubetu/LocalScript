@@ -86,10 +86,10 @@ def _repeat(times: int, fallback=lambda _: dict()):
 
     def decorator_repeat(func):
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        async def wrapper(*args, **kwargs):
             for attempt in range(1, times + 1):
                 try:
-                    result = func(*args, **kwargs)
+                    result = await func(*args, **kwargs)
                     return result
                 except Exception as e:
                     logger.warning(
