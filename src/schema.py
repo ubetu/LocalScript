@@ -8,8 +8,10 @@ class State(MessagesState):
     static_result: LuaCheckResult
     dynamic_result: LuaRunResult
     task: str
-    possile_input: str | None
+    possible_input: str | None
     fix_attempts: int
+    json_key: str | None
+    formatted_output: str | None
 
 
 # TODO: improve it
