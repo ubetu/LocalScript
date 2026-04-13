@@ -21,6 +21,15 @@ wheels = [
 ]
 
 [[package]]
+name = "antlr4-python3-runtime"
+version = "4.13.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/33/5f/2cdf6f7aca3b20d3f316e9f505292e1f256a32089bd702034c29ebde6242/antlr4_python3_runtime-4.13.2.tar.gz", hash = "sha256:909b647e1d2fc2b70180ac586df3933e38919c85f98ccc656a96cd3f25ef3916", size = 117467, upload-time = "2024-08-03T19:00:12.757Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/89/03/a851e84fcbb85214dc637b6378121ef9a0dd61b4c65264675d8a5c9b1ae7/antlr4_python3_runtime-4.13.2-py3-none-any.whl", hash = "sha256:fe3835eb8d33daece0e799090eda89719dbccee7aa39ef94eed3818cafa5a7e8", size = 144462, upload-time = "2024-08-03T19:00:11.134Z" },
+]
+
+[[package]]
 name = "anyio"
 version = "4.13.0"
 source = { registry = "https://pypi.org/simple" }
@@ -296,6 +305,7 @@ dependencies = [
     { name = "langchain" },
     { name = "langchain-ollama" },
     { name = "langgraph" },
+    { name = "luaparser" },
     { name = "ollama" },
 ]
 
@@ -305,7 +315,30 @@ requires-dist = [
     { name = "langchain", specifier = ">=1.2.15" },
     { name = "langchain-ollama", specifier = ">=1.1.0" },
     { name = "langgraph", specifier = ">=1.1.6" },
+    { name = "luaparser", specifier = ">=4.0.0" },
     { name = "ollama", specifier = ">=0.6.1" },
+]
+
+[[package]]
+name = "luaparser"
+version = "4.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "antlr4-python3-runtime" },
+    { name = "multimethod" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/94/61/6a6e51e6f724ec803c781d66cc797c26279800db524ad0124ab52531b422/luaparser-4.0.0.tar.gz", hash = "sha256:48caf50e6d85463acf881bde53f76031d45ff958217d35ca46de3b66d2ca80cf", size = 56095, upload-time = "2025-12-15T08:58:10.301Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4c/10/f7710a0b3c4c513dd1af9ae67565c9974000d00547ab91f7d87de67e3209/luaparser-4.0.0-py3-none-any.whl", hash = "sha256:a786979653a6f276dec84bd298271196747b424f49b17c5522e75285aa0aedb7", size = 63064, upload-time = "2025-12-15T08:58:09.279Z" },
+]
+
+[[package]]
+name = "multimethod"
+version = "2.0.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/b1/2d/6274e03d1d656f329f3546140a536fc728b68a1ef123d0deebc751541473/multimethod-2.0.2.tar.gz", hash = "sha256:4f753e9ef0eb08f25037fb7d04f3de22547716c4af257a978e1c4d660edab8f4", size = 15657, upload-time = "2025-11-18T01:16:33.222Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e2/3d/44e60142e058f7e41d0ab19e7f5cc9d77a00833fd6f0197dbbd4f13c0321/multimethod-2.0.2-py3-none-any.whl", hash = "sha256:e6e61347765ec0c154aef827bd6952a685a6693eb9d927fb530a6c364c77939e", size = 9561, upload-time = "2025-11-18T01:16:31.811Z" },
 ]
 
 [[package]]
