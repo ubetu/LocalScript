@@ -17,7 +17,7 @@ class LuaRunResult:
     success: bool
     output: str | None = None
     error: str | None = None
-    line: str | None = None #TODO: change this api, please (line should be real string line, not the number of a line)
+    line: str | None = None
     column: int | None = None
 
 
@@ -159,7 +159,7 @@ async def run_lua(code: str, context_json: str) -> LuaRunResult:
         return LuaRunResult(
             success=False,
             error=msg,
-            line=line,
+            line=code.splitlines()[line - 1] if line else None,
             column=col,
         )
 
