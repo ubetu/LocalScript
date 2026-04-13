@@ -8,7 +8,8 @@ class State(MessagesState):
     linter_result: LuaCheckResult
     task: str
     possile_input: str | None
-    fix_attempts: int = 0
+    fix_attempts: int
+
 
 # TODO: improve it
 class QuestionsSchema(BaseModel):
