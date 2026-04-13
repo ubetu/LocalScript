@@ -192,7 +192,7 @@ def test_validate_lua_merges_results(monkeypatch):
             ],
         )
 
-    monkeypatch.setattr("lua_parser.run_luacheck", fake_run_luacheck)
+    monkeypatch.setattr("lua.lua_parser.run_luacheck", fake_run_luacheck)
 
     result = asyncio.run(validate_lua('print("hello")'))
 
