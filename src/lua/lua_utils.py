@@ -4,6 +4,7 @@ import re
 from dataclasses import dataclass
 import xml.etree.ElementTree as ET
 from enum import StrEnum
+import json
 
 
 class LuaIssueSeverity(StrEnum):
@@ -136,6 +137,11 @@ async def run_luacheck(
         errors=errors,
         warnings=warnings,
     )
+
+
+async def wrap_lua_code(key: str, code: str) -> str:
+    """Wraps Lua code in a JSON object with a specific key."""
+    return json.dumps({key: f"lua{{{code}}}lua"})
 
 
 if __name__ == "__main__":
