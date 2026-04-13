@@ -12,12 +12,17 @@ class LuaIssueSeverity(StrEnum):
 
 
 @dataclass
+class LuaIssueMessage:
+    line: int | None
+    column: int | None
+    message: str
+
+
+@dataclass
 class LuaIssue:
     type: str
     severity: LuaIssueSeverity
-    message: str
-    line: int | None = None
-    column: int | None = None
+    message: LuaIssueMessage
 
 
 @dataclass
@@ -28,79 +33,81 @@ class LuaCheckResult:
     warnings: list[LuaIssue]
 
 
+_POSITION_PATTERN = re.compile(r"^[^:]+:(\d+):(\d+):(.*)$")
+
+
+def _parse_message(message: str) -> LuaIssueMessage:
+    """
+    Parses a message string and extracts line, column, and message information.
+    """
+    match = _POSITION_PATTERN.match(message)
+    if match is not None:
+        line = int(match.group(1))
+        column = int(match.group(2))
+        message = match.group(3).lstrip()
+        return LuaIssueMessage(line=line, column=column, message=message)
+    return LuaIssueMessage(line=None, column=None, message=message)
+
+
+def _parse_failure(issue: ET.Element[str]) -> LuaIssue:
+    """
+    Parses a failure element and extracts issue information.
+    """
+    code_type = issue.get("type", "unknown")
+    message = issue.get("message", "")
+    issue_message = _parse_message(message)
+    if code_type.startswith("E"):
+        severity = LuaIssueSeverity.ERROR
+    else:
+        severity = LuaIssueSeverity.WARNING
+
+    return LuaIssue(
+        type=code_type,
+        severity=severity,
+        message=issue_message,
+    )
+
+
+def _parse_error(issue: ET.Element[str]) -> LuaIssue:
+    code_type = issue.get("type", "unknown")
+    message = issue.get("message", "")
+    issue_message = _parse_message(message)
+    severity = LuaIssueSeverity.ERROR
+
+    return LuaIssue(
+        type=code_type,
+        severity=severity,
+        message=issue_message,
+    )
+
 
 def _parse_luacheck_output(output: str) -> tuple[list[LuaIssue], list[LuaIssue]]:
     errors: list[LuaIssue] = []
     warnings: list[LuaIssue] = []
-    position_pattern = re.compile(r"^[^:]+:(\d+):(\d+):(.*)$")
 
     root = ET.fromstring(output)
     for testcase in root.iter("testcase"):
         for failure in testcase.findall("failure"):
             if failure is None:
                 continue
-            code_type = failure.get("type", "unknown")
-            message = failure.get("message", "")
-            line = None
-            column = None
-            match = position_pattern.match(message)
-            if match is not None:
-                line = int(match.group(1))
-                column = int(match.group(2))
-                message = match.group(3).lstrip()
-            severity = (
-                LuaIssueSeverity.ERROR
-                if code_type.startswith("E")
-                else LuaIssueSeverity.WARNING
-            )
-            if severity == LuaIssueSeverity.ERROR:
-                errors.append(
-                    LuaIssue(
-                        type=code_type,
-                        severity=severity,
-                        message=message,
-                        line=line,
-                        column=column,
-                    )
-                )
+            error = _parse_failure(failure)
+            if error.severity == LuaIssueSeverity.ERROR:
+                errors.append(error)
             else:
-                warnings.append(
-                    LuaIssue(
-                        type=code_type,
-                        severity=severity,
-                        message=message,
-                        line=line,
-                        column=column,
-                    )
-                )
+                warnings.append(error)
 
         for error in testcase.findall("error"):
             if error is None:
                 continue
-            code_type = error.get("type", "")
-            message = error.get("message", code_type)
-            severity = LuaIssueSeverity.ERROR
-            line = None
-            column = None
-            match = position_pattern.match(message)
-            if match is not None:
-                line = int(match.group(1))
-                column = int(match.group(2))
-                message = match.group(3).lstrip()
-            errors.append(
-                LuaIssue(
-                    type=code_type,
-                    severity=severity,
-                    message=message,
-                    line=line,
-                    column=column,
-                )
-            )
+            error = _parse_error(error)
+            errors.append(error)
 
     return errors, warnings
 
 
-async def run_luacheck(code: str, config_path: str = "resources/luacheckrc.lua") -> LuaCheckResult:
+async def run_luacheck(
+    code: str, config_path: str = "resources/luacheckrc.lua"
+) -> LuaCheckResult:
     # TODO:Handle subprocess errors and timeouts
     proc = await asyncio.create_subprocess_exec(
         "luacheck",
@@ -145,8 +152,12 @@ if __name__ == "__main__":
     errors, warnings = _parse_luacheck_output(output)
     print("Errors:")
     for error in errors:
-        print(f"- {error.type}: {error.message}, line {error.line}, column {error.column}")
+        print(
+            f"- {error.type}: {error.message}, line {error.message.line}, column {error.message.column}"
+        )
 
     print("\nWarnings:")
     for warning in warnings:
-        print(f"- {warning.type}: {warning.message}, line {warning.line}, column {warning.column}")
+        print(
+            f"- {warning.type}: {warning.message}, line {warning.message.line}, column {warning.message.column}"
+        )
