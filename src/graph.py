@@ -14,7 +14,8 @@ from .prompts import (
     EXTRACT_AFTER_ASK_PROMPT
 )
 from .client import llm_client
-from .lua_utils import run_luacheck, LuaCheckResult
+from .lua_parser import run_luacheck
+from .lua_utils import LuaCheckResult
 
 MAX_FIX_TRIES = 5
 
