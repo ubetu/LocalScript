@@ -19,7 +19,7 @@ from .prompts import (
 )
 from .client import llm_client
 from .lua.lua_parser import run_luacheck
-from .lua.lua_utils import LuaCheckResult
+from .lua.lua_utils import LuaCheckResult, wrap_lua_code
 from .lua.lua_tests import LuaRunResult, run_lua
 
 logger = logging.getLogger(__name__)
@@ -275,11 +275,13 @@ def build_graph() -> CompiledStateGraph:
         )
 
     def format_code(state: State) -> str:
-        # TODO: fromat code in json format
         logger.info(
             f"format_code: formatting output, code length={len(state['code'])} chars" # type: ignore
-        )  # type: ignore
-        return state["code"]  # type: ignore
+        )
+        key="TODO" #TODO: add key
+        code = wrap_lua_code(key, state['code'])  # type: ignore
+        logger.info(f"format code: new code is {code}")
+        return code
 
     # TODO: if user send existing code, it can be in json format, we want to convert it into common form
     builder = StateGraph(State)

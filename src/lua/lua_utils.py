@@ -139,7 +139,7 @@ async def run_luacheck(
     )
 
 
-async def wrap_lua_code(key: str, code: str) -> str:
+def wrap_lua_code(key: str, code: str) -> str:
     """Wraps Lua code in a JSON object with a specific key."""
     return json.dumps({key: f"lua{{{code}}}lua"})
 
