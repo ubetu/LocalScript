@@ -1,7 +1,7 @@
 import asyncio
 
-from lua_parser import validate_ast, validate_lua
-from lua_utils import LuaCheckResult, LuaIssue, LuaIssueMessage, LuaIssueSeverity
+from lua.lua_parser import validate_ast, validate_lua
+from lua.lua_utils import LuaCheckResult, LuaIssue, LuaIssueMessage, LuaIssueSeverity
 
 
 VALID_EXAMPLES = [

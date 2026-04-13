@@ -8,7 +8,7 @@ import textwrap
 
 import pytest
 
-from lua_parser import validate_lua
+from lua.lua_parser import validate_lua
 
 
 def run(coro):

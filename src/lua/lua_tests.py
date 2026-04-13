@@ -17,7 +17,7 @@ class LuaRunResult:
     success: bool
     output: str | None = None
     error: str | None = None
-    line: int | None = None
+    line: str | None = None #TODO: change this api, please (line should be real string line, not the number of a line)
     column: int | None = None
 
 

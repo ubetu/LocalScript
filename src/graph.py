@@ -14,14 +14,15 @@ from .prompts import (
     EXTRACT_AFTER_ASK_PROMPT
 )
 from .client import llm_client
-from .lua_parser import run_luacheck
-from .lua_utils import LuaCheckResult
+from .lua.lua_parser import run_luacheck
+from .lua.lua_utils import LuaCheckResult
+from .lua.lua_tests import LuaRunResult, run_lua
 
 MAX_FIX_TRIES = 5
 
 def build_user_message(
     task: str, possible_input: str | None, code: str | None = None,
-    linter_result: LuaCheckResult | None = None
+    static_result: LuaCheckResult | None = None, dynamic_result: LuaRunResult | None = None
 ) -> str:
     """Build user message for code nodes of the graph. All inputs should be getted from the state."""
     parts = [f"Task: {task}"]
@@ -29,16 +30,23 @@ def build_user_message(
         parts.append(f"Possible input:\n{possible_input}")
     if code:
         parts.append(f"Current code:\n```lua\n{code}\n```")
-    if linter_result:
-        errors = [f"- {error.type}: {error.message}, line {error.message.line}, column {error.message.column}" for error in linter_result.errors]
-        warnings = [f"- {warning.type}: {warning.message}, line {warning.message.line}, column {warning.message.column}" for warning in linter_result.warnings]
+    if static_result and not static_result.passed:
+        errors = [f"- {error.type}: {error.message}, line {error.message.line}, column {error.message.column}" for error in static_result.errors]
+        warnings = [f"- {warning.type}: {warning.message}, line {warning.message.line}, column {warning.message.column}" for warning in static_result.warnings]
         if errors or warnings:
-            text = "Linter output:\n"
+            text = "Static checker output:\n"
             if warnings:
                 text += "Warnings:\n" + "\n".join(warnings)
             if errors:
                 text += "Errors:\n" + "\n".join(errors) 
             parts.append(text)
+    
+    if dynamic_result and not dynamic_result.success:
+        text = "Runtime error"
+        if dynamic_result.line:
+            text += f" on code line: {dynamic_result.line}\n"
+        text += f"has an error: {dynamic_result.error}"
+        parts.append(text)
 
     return "\n\n".join(parts)
 
@@ -168,24 +176,32 @@ def build_graph() -> CompiledStateGraph:
             task=state["task"],
             possible_input=state["possile_input"],
             code=state["code"],
-            linter_result=state["linter_result"] #TODO: add another checks
+            static_result=state["static_result"],
+            dynamic_result=state["dynamic_result"]
         )
 
         return await _code(FIX_CODE_PROMPT, user_message)
 
     async def test(state: State) -> Command:
-        # TODO: add another checks
+        static_result = None
         try:
-            linter_result = await run_luacheck(state["code"]) # type: ignore
+            static_result = await run_luacheck(state["code"]) # type: ignore
         except Exception:
-            return Command(goto=END)
+            pass
         
-        if linter_result.passed:
+        dynamic_result = None
+        if state["possile_input"] is not None:
+            try:
+                dynamic_result = await run_lua(state["code"], state["possile_input"]) # type: ignore
+            except Exception:
+                pass
+        
+        if (static_result is None or static_result.passed) and (dynamic_result is None or dynamic_result.success):
             return Command(goto=END)
         fix_attempts = state.get("fix_attempts", 0) + 1
         if fix_attempts >= MAX_FIX_TRIES:
-            return Command(update={"linter_result": linter_result, "fix_attempts": fix_attempts}, goto=END)
-        return Command(update={"linter_result": linter_result, "fix_attempts": fix_attempts}, goto="fix_code")
+            return Command(goto=END)
+        return Command(update={"static_result": static_result, "fix_attempts": fix_attempts, "dynamic_result": dynamic_result}, goto="fix_code")
     
     def format_code(state: State) -> str:
         # TODO: fromat code in json format

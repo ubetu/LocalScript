@@ -1,6 +1,6 @@
 import asyncio
 import pytest
-from lua_tests import run_lua, LuaRunResult
+from lua.lua_tests import run_lua, LuaRunResult
 
 EMPTY_CTX = '{"wf":{}}'
 

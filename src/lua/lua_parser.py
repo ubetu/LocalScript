@@ -13,7 +13,7 @@ try:
         run_luacheck,
     )
 except ImportError:  # pragma: no cover - supports direct script imports in tests/tools
-    from lua_utils import (
+    from lua.lua_utils import (
         LuaCheckResult,
         LuaIssue,
         LuaIssueMessage,

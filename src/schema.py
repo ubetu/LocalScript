@@ -1,11 +1,13 @@
 from pydantic import BaseModel
 from langgraph.graph import MessagesState
 from enum import StrEnum
-from .lua_utils import LuaCheckResult
+from .lua.lua_utils import LuaCheckResult
+from .lua.lua_tests import LuaRunResult
 
 class State(MessagesState):
     code: str | None
-    linter_result: LuaCheckResult
+    static_result: LuaCheckResult
+    dynamic_result: LuaRunResult
     task: str
     possile_input: str | None
     fix_attempts: int
