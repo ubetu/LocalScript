@@ -85,14 +85,25 @@ def _parse_code(text: str) -> str:
     # TODO: here we can return that text format is incorrect
     match = re.search(r"```lua\s*\n(.*?)```", text, re.DOTALL)
     if match:
-        return match.group(1).strip()
+        return _strip_fences(match.group(1).strip())
     if "CODE:" in text:
         after = text.split("CODE:", 1)[1]
         match = re.search(r"```\w*\s*\n(.*?)```", after, re.DOTALL)
         if match:
-            return match.group(1).strip()
-        return after.strip()
+            return _strip_fences(match.group(1).strip())
+        return _strip_fences(after.strip())
+    # Incomplete fence: model opened ```lua but never closed it
+    match = re.search(r"```lua\s*\n(.*)", text, re.DOTALL)
+    if match:
+        return _strip_fences(match.group(1).strip())
     raise RuntimeError()
+
+
+def _strip_fences(code: str) -> str:
+    """Remove any stray markdown fence markers that leaked into extracted code."""
+    code = re.sub(r"^```(?:lua)?\s*\n?", "", code)
+    code = re.sub(r"\n?```\s*$", "", code)
+    return code.strip()
 
 
 def _repeat(times: int, fallback=lambda _: dict()):
