@@ -23,10 +23,14 @@ from .schema import (
     SessionStatusResponse,
 )
 
+import logging
+logging.basicConfig(level=logging.DEBUG)
+
 app = FastAPI(
     title="LocalScript API",
     description="Generate and validate Lua scripts through an LLM-driven agentic pipeline.",
     version="0.1.0",
+
 )
 
 

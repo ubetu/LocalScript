@@ -40,21 +40,20 @@ Rules:
  
 EXTRACT_PROMPT = """\
 You are a parser. Extract structured information from a user request about a Lua script.
- 
+
 The user request may contain:
 1. A task description in natural language (always present)
-2. A JSON context with variables under wf.vars or wf.initVariables (sometimes absent)
+2. A JSON context with variables under wf.vars or wf.initVariables (ignored — do not extract)
 3. Existing Lua code that needs modification (sometimes present)
 4. A JSON key indicating where to store the result (sometimes present)
- 
+
 Return:
 - task: copy the task description exactly as the user wrote it, \
 without the JSON context and without the code.
-- possible_input: the JSON context exactly as provided. Null if absent.
 - code: existing Lua code the user wants to modify. Null if the user \
 asks to write new code.
-- json_key: the JSON key indicating where to store the result. "result" if absent.
- 
+- json_key: the JSON key indicating where to store the result. Null if not explicitly specified. Should be only one key, not a path. (not "wf.vars.result...")
+
 Do not solve the task. Only extract."""
  
  
@@ -65,15 +64,14 @@ Do not solve the task. Only extract."""
 EXTRACT_AFTER_ASK_PROMPT = """\
 You are a parser. The user was asked clarifying questions and has answered them. \
 Combine the original request and the answers into a complete task description.
- 
+
 Return:
 - task: a single clear task description that includes all relevant \
 information from the conversation. Write it as if the user said it in one message.
-- possible_input: the JSON context exactly as provided. Null if absent.
 - code: existing Lua code the user wants to modify. Null if the user \
 asks to write new code.
-- json_key: the JSON key indicating where to store the result. "result" if absent.
- 
+- json_key: the JSON key indicating where to store the result. Null if not explicitly specified. Should be only one key, not a path. (not "wf.vars.result...")
+
 Do not solve the task. Only extract and reformulate.
  
 Example conversation:

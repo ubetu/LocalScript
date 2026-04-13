@@ -24,6 +24,7 @@ from .client import llm_client
 from .lua import LuaCheckResult, LuaRunResult, run_lua, run_luacheck, wrap_lua_code
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 MAX_FIX_TRIES = 5
 
@@ -132,6 +133,23 @@ def _repeat(times: int, fallback=lambda _: dict()):
     return decorator_repeat
 
 
+def _extract_context_from_messages(messages: list) -> str | None:
+    """Extract the JSON context directly from human messages.
+
+    main.py appends '\n\nContext: {json}' to every first user message.
+    Parsing it here avoids asking the LLM to copy a large JSON blob,
+    which local models truncate and produce invalid JSON.
+    """
+    context_marker = "\n\nContext: "
+    for msg in messages:
+        if hasattr(msg, "type") and msg.type == "human":
+            content = msg.content
+            idx = content.find(context_marker)
+            if idx != -1:
+                return content[idx + len(context_marker):]
+    return None
+
+
 def build_graph() -> CompiledStateGraph:
     # EXTRACTION
 
@@ -141,19 +159,21 @@ def build_graph() -> CompiledStateGraph:
         response = await llm_client.with_structured_output(TaskEntities).ainvoke(messages)
         assert isinstance(response, TaskEntities)
 
+        possible_input = _extract_context_from_messages(state["messages"])
+
         logger.debug(
             "_extract → received: task=%r, possible_input=%s, code=%s, json_key=%r",
             response.task[:100] if response.task else None,
-            repr(response.possible_input[:200]) if response.possible_input else None,
+            repr(possible_input[:200]) if possible_input else None,
             f"{response.code[:80]}…" if response.code else None,
             response.json_key,
         )
         logger.info(
-            f"extract: task={bool(response.task)}, has_code={response.code is not None}, has_possible_input={response.possible_input is not None}"
+            f"extract: task={bool(response.task)}, has_code={response.code is not None}, has_possible_input={possible_input is not None}"
         )
         return {
             "code": response.code,
-            "possible_input": response.possible_input,
+            "possible_input": possible_input,
             "task": response.task,
             "json_key": response.json_key,
             "fix_attempts": 0,

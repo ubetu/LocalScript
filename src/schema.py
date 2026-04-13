@@ -21,7 +21,6 @@ class QuestionsSchema(BaseModel):
 
 class TaskEntities(BaseModel):
     task: str
-    possible_input: str | None = None
     code: str | None = None
     json_key: str | None = None
 
