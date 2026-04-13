@@ -11,4 +11,8 @@ dependencies = [
     "langgraph>=1.1.6",
     "luaparser>=4.0.0",
     "ollama>=0.6.1",
+    "pytest>=9.0.3",
 ]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
