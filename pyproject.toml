@@ -12,6 +12,7 @@ dependencies = [
     "luaparser>=4.0.0",
     "ollama>=0.6.1",
     "pytest>=9.0.3",
+    "uvicorn[standard]>=0.34.0",
 ]
 
 [tool.pytest.ini_options]
