@@ -1,6 +1,6 @@
 _PLATFORM_RULES = """\
 Platform rules:
-- Lua 5.5
+- Lua 5.3
 - Scripts are embedded as lua{...}lua inside JSON strings. \
 You return raw Lua code only, without the lua{...}lua wrapper.
 - All declared workflow variables are in wf.vars
@@ -39,6 +39,7 @@ The user request may contain:
 1. A task description in natural language (always present)
 2. A JSON context with variables under wf.vars or wf.initVariables (sometimes absent)
 3. Existing Lua code that needs modification (sometimes present)
+4. A JSON key indicating where to store the result (sometimes present)
  
 Return:
 - task: copy the task description exactly as the user wrote it, \
@@ -46,6 +47,7 @@ without the JSON context and without the code.
 - context: the JSON context exactly as provided. Null if absent.
 - code: existing Lua code the user wants to modify. Null if the user \
 asks to write new code.
+- json_key: the JSON key indicating where to store the result. "result" if absent.
  
 Do not solve the task. Only extract."""
  
@@ -64,6 +66,7 @@ information from the conversation. Write it as if the user said it in one messag
 - context: the JSON context exactly as provided. Null if absent.
 - code: existing Lua code the user wants to modify. Null if the user \
 asks to write new code.
+- json_key: the JSON key indicating where to store the result. "result" if absent.
  
 Do not solve the task. Only extract and reformulate.
  

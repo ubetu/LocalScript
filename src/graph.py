@@ -117,6 +117,7 @@ def build_graph() -> CompiledStateGraph:
             "code": response.code,
             "possible_input": response.possible_input,
             "task": response.task,
+            "json_key": response.json_key,
             "fix_attempts": 0,
         }
         logger.info(
@@ -276,7 +277,7 @@ def build_graph() -> CompiledStateGraph:
         logger.info(
             f"format_code: formatting output, code length={len(state['code'])} chars" # type: ignore
         )
-        key="TODO" #TODO: add key
+        key=state.get("json_key", "result")
         code = wrap_lua_code(key, state['code'])  # type: ignore
         logger.info(f"format code: new code is {code}")
         return code
