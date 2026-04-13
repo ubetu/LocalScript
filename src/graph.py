@@ -14,13 +14,15 @@ from .prompts import (
 from .client import llm_client
 from .lua_utils import run_luacheck, LuaCheckResult
 
+MAX_FIX_TRIES = 3
+
 def build_user_message(
     task: str, possible_input: str | None, code: str | None = None,
     linter_result: LuaCheckResult | None = None,
 ) -> str:
     parts = [f"Task: {task}"]
     if possible_input:
-        parts.append(f"Possible input: possible_input")
+        parts.append(f"Possible input:\n{possible_input}")
     if code:
         parts.append(f"Current code:\n```lua\n{code}\n```")
     if linter_result:
@@ -59,8 +61,12 @@ def build_graph() -> CompiledStateGraph:
         )
         assert isinstance(response, TaskEntities)
 
-        return {"code": response.code, "possible_input": response.possible_input,
-                "task": response.task}
+        return {
+            "code": response.code,
+            "possible_input": response.possible_input,
+            "task": response.task,
+            "fix_attempts": 0,
+        }
     
     async def first_extract(state: State) -> dict:
         return await _extract(state, EXTRACT_PROMPT)
@@ -114,7 +120,9 @@ def build_graph() -> CompiledStateGraph:
             task=state["task"],
             possible_input=state["possile_input"],
         )
-        return await _code(GENERATE_CODE_PROMPT, user_message)
+        code_result = await _code(GENERATE_CODE_PROMPT, user_message)
+        code_result["fix_attempts"] = 0
+        return code_result
     
     async def modify_code (state: State) -> dict:
         user_message = build_user_message(
@@ -122,7 +130,9 @@ def build_graph() -> CompiledStateGraph:
             possible_input=state["possile_input"],
             code=state["code"]
             )
-        return await _code(MODIFY_CODE_PROMPT, user_message)
+        code_result = await _code(MODIFY_CODE_PROMPT, user_message)
+        code_result["fix_attempts"] = 0
+        return code_result
     
     async def fix_code (state: State) -> dict:
         user_message = build_user_message(
@@ -139,7 +149,10 @@ def build_graph() -> CompiledStateGraph:
         linter_result = await run_luacheck(state["code"]) # type: ignore
         if linter_result.passed:
             return Command(goto=END)
-        return Command(update={"linter_result": linter_result}, goto="fix_code")
+        fix_attempts = state.get("fix_attempts", 0) + 1
+        if fix_attempts >= MAX_FIX_TRIES:
+            return Command(update={"linter_result": linter_result, "fix_attempts": fix_attempts}, goto=END)
+        return Command(update={"linter_result": linter_result, "fix_attempts": fix_attempts}, goto="fix_code")
     
     def format_code(state: State) -> str:
         # TODO: fromat code in json format
