@@ -28,8 +28,8 @@ def build_user_message(
     if code:
         parts.append(f"Current code:\n```lua\n{code}\n```")
     if linter_result:
-        errors = [f"- {error.type}: {error.message}, line {error.line}, column {error.column}" for error in linter_result.errors]
-        warnings = [f"- {warning.type}: {warning.message}, line {warning.line}, column {warning.column}" for warning in linter_result.warnings]
+        errors = [f"- {error.type}: {error.message}, line {error.message.line}, column {error.message.column}" for error in linter_result.errors]
+        warnings = [f"- {warning.type}: {warning.message}, line {warning.message.line}, column {warning.message.column}" for warning in linter_result.warnings]
         if errors or warnings:
             text = "Linter output:\n"
             if warnings:
