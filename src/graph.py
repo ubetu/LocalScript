@@ -68,6 +68,18 @@ def build_user_message(
     return "\n\n".join(parts)
 
 
+def _fmt_messages(messages: list) -> str:
+    """Format a list of LangChain messages into a readable debug string."""
+    parts = []
+    for m in messages:
+        role = type(m).__name__.replace("Message", "").upper()
+        content = str(m.content)
+        if len(content) > 500:
+            content = content[:500] + "…"
+        parts.append(f"[{role}] {content}")
+    return "\n".join(parts)
+
+
 def _parse_code(text: str) -> str:
     """Parse code from the analysis-code shama (check prompts)."""
     # TODO: here we can return that text format is incorrect
@@ -113,22 +125,28 @@ def build_graph() -> CompiledStateGraph:
     # EXTRACTION
 
     async def _extract(state: State, system_prompt: str) -> dict:
-        response = await llm_client.with_structured_output(TaskEntities).ainvoke(
-            [SystemMessage(system_prompt), *state["messages"]]
-        )
+        messages = [SystemMessage(system_prompt), *state["messages"]]
+        logger.debug("_extract ← sending to model:\n%s", _fmt_messages(messages))
+        response = await llm_client.with_structured_output(TaskEntities).ainvoke(messages)
         assert isinstance(response, TaskEntities)
 
-        result = {
+        logger.debug(
+            "_extract → received: task=%r, possible_input=%s, code=%s, json_key=%r",
+            response.task[:100] if response.task else None,
+            repr(response.possible_input[:200]) if response.possible_input else None,
+            f"{response.code[:80]}…" if response.code else None,
+            response.json_key,
+        )
+        logger.info(
+            f"extract: task={bool(response.task)}, has_code={response.code is not None}, has_possible_input={response.possible_input is not None}"
+        )
+        return {
             "code": response.code,
             "possible_input": response.possible_input,
             "task": response.task,
             "json_key": response.json_key,
             "fix_attempts": 0,
         }
-        logger.info(
-            f"extract: task={bool(response.task)}, has_code={response.code is not None}, has_possible_input={response.possible_input is not None}"
-        )
-        return result
 
     @_repeat(times=6, fallback=lambda state, _: {"task": state["messages"]})
     async def first_extract(state: State) -> dict:
@@ -150,9 +168,9 @@ def build_graph() -> CompiledStateGraph:
     # QA
 
     async def _ask(state: State, system_prompt: str) -> dict:
-        response = await llm_client.with_structured_output(QuestionsSchema).ainvoke(
-            [SystemMessage(system_prompt), *state["messages"]]
-        )
+        messages = [SystemMessage(system_prompt), *state["messages"]]
+        logger.debug("_ask ← sending to model:\n%s", _fmt_messages(messages))
+        response = await llm_client.with_structured_output(QuestionsSchema).ainvoke(messages)
 
         assert isinstance(response, QuestionsSchema)
 
@@ -161,10 +179,13 @@ def build_graph() -> CompiledStateGraph:
             response_str = "\n".join(
                 f"{i}. {q}" for i, q in enumerate(response.questions, 1)
             )
+            logger.debug("_ask → model questions:\n%s", response_str)
             answer = interrupt(response_str)
+            logger.debug("_ask ← user answered: %r", answer[:300] if len(answer) > 300 else answer)
             return {"messages": [AIMessage(response_str), HumanMessage(answer)]}
         else:
             logger.info("ask: no questions needed, skipping")
+            logger.debug("_ask → model returned no questions, skipping interrupt")
             return {}
 
     @_repeat(times=3)
@@ -180,14 +201,20 @@ def build_graph() -> CompiledStateGraph:
     # CODE
 
     async def _code(system_prompt: str, user_message: str) -> dict:
+        truncated = user_message[:500] + "…" if len(user_message) > 500 else user_message
+        logger.debug("_code ← sending to model:\n[SYSTEM] (see prompts.py)\n[HUMAN] %s", truncated)
         response = await llm_client.ainvoke(
             [SystemMessage(system_prompt), HumanMessage(user_message)]
         )
 
         assert isinstance(response.content, str)
 
+        logger.debug(
+            "_code → raw response:\n%s",
+            response.content[:800] + "…" if len(response.content) > 800 else response.content,
+        )
         code = _parse_code(response.content)
-        logger.debug(f"code generated: {code.count(chr(10)) + 1} lines")
+        logger.debug("_code → parsed code: %d lines", code.count("\n") + 1)
         return {"code": code}
 
     @_repeat(times=10)
@@ -199,6 +226,7 @@ def build_graph() -> CompiledStateGraph:
         )
         code_result = await _code(GENERATE_CODE_PROMPT, user_message)
         code_result["fix_attempts"] = 0
+        logger.debug("generate_code → produced code (%d lines)", code_result["code"].count("\n") + 1)
         return code_result
 
     @_repeat(times=6)
@@ -211,6 +239,7 @@ def build_graph() -> CompiledStateGraph:
         )
         code_result = await _code(MODIFY_CODE_PROMPT, user_message)
         code_result["fix_attempts"] = 0
+        logger.debug("modify_code → produced code (%d lines)", code_result["code"].count("\n") + 1)
         return code_result
 
     @_repeat(times=6)
@@ -224,7 +253,9 @@ def build_graph() -> CompiledStateGraph:
             dynamic_result=state["dynamic_result"],
         )
 
-        return await _code(FIX_CODE_PROMPT, user_message)
+        code_result = await _code(FIX_CODE_PROMPT, user_message)
+        logger.debug("fix_code → produced code (%d lines)", code_result["code"].count("\n") + 1)
+        return code_result
 
     async def test(state: State) -> Command:
         static_result = None
