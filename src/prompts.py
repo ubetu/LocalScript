@@ -44,7 +44,7 @@ The user request may contain:
 Return:
 - task: copy the task description exactly as the user wrote it, \
 without the JSON context and without the code.
-- context: the JSON context exactly as provided. Null if absent.
+- possible_input: the JSON context exactly as provided. Null if absent.
 - code: existing Lua code the user wants to modify. Null if the user \
 asks to write new code.
 - json_key: the JSON key indicating where to store the result. "result" if absent.
@@ -63,7 +63,7 @@ Combine the original request and the answers into a complete task description.
 Return:
 - task: a single clear task description that includes all relevant \
 information from the conversation. Write it as if the user said it in one message.
-- context: the JSON context exactly as provided. Null if absent.
+- possible_input: the JSON context exactly as provided. Null if absent.
 - code: existing Lua code the user wants to modify. Null if the user \
 asks to write new code.
 - json_key: the JSON key indicating where to store the result. "result" if absent.
@@ -170,7 +170,23 @@ or (item.Markdown ~= "" and item.Markdown ~= nil) then
     end
 end
 return result
-```"""
+```
+YOU SHOULD NOT MODIFY THE `wf.vars` or `wf.initVariables`.
+If task asks to modify the. You should instead return the new value, WITHOUT modifying the existing variables.
+Example:
+
+Task: Увеличивай значение переменной `try_count_n` на каждой итерации
+Context: {{"wf":{{"vars":{{"try_count_n":3}}}}}}
+
+ANALYSIS:
+User wants to increment `try_count_n` on each iteration.
+However, I should not modify `wf.vars.try_count_n` directly. Instead, return the new value as `try_count_n + 1`.
+
+CODE:
+```lua
+return wf.vars.try_count_n + 1
+```
+"""
  
  
 # ──────────────────────────────────────────────
