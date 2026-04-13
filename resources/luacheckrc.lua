@@ -1,13 +1,17 @@
 -- .luacheckrc for MWS Octapi
 
 -- Lua 5.3 is closest available std (5.5 not supported by luacheck)
-std = "lua53"
+-- luacheckrc.lua
+std = "none"  -- start from zero, not lua51/lua52 defaults
 
--- Platform globals: wf is read-only (agent reads from it),
--- _utils is read-only
 read_globals = {
-    wf = { other_fields = true },
-    _utils = { other_fields = true },
+    "wf",
+    "_utils",
+    -- Lua builtins available in the sandbox
+    "type", "tonumber", "tostring", "pairs", "ipairs",
+    "table", "string", "math", "error", "select",
+    "unpack", "pcall", "xpcall",
+    -- add/remove based on what Octapi actually exposes
 }
 -- Generated code assigns to top-level vars freely (e.g. result = ...)
 allow_defined_top = true
