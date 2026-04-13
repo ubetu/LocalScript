@@ -53,11 +53,11 @@ def _parse_code(text: str) -> str:
         return after.strip()
     return text.strip()
 
-def _repeat(n: int, fallback_factory=lambda _: dict()):
+def _repeat(times: int, fallback_factory=lambda _: dict()):
     def decorator_repeat(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            for _ in range(n):
+            for _ in range(times):
                 try:
                     result = func(*args, **kwargs)
                     return result
@@ -84,11 +84,11 @@ def build_graph() -> CompiledStateGraph:
             "fix_attempts": 0,
         }
     
-    @_repeat(n=6, fallback_factory=lambda state, _: {"task" : state["messages"]})
+    @_repeat(times=6, fallback_factory=lambda state, _: {"task" : state["messages"]})
     async def first_extract(state: State) -> dict:
         return await _extract(state, EXTRACT_PROMPT)
     
-    @_repeat(n=3)
+    @_repeat(times=3)
     async def extract_after_QA(state: State) -> dict:
         return await _extract(state, EXTRACT_AFTER_ASK_PROMPT)
     
@@ -111,11 +111,11 @@ def build_graph() -> CompiledStateGraph:
         else:
             return {}
         
-    @_repeat(n=3)
+    @_repeat(times=3)
     async def ask_to_clarify(state: State) -> dict:
         return await _ask(state, ASK_CLARIFY_PROMPT)
     
-    @_repeat(n=3)
+    @_repeat(times=3)
     async def ask_missing_info(state: State) -> dict:
         missing = "- JSON context with input variables (wf.vars or wf.initVariables) is not provided"
         system_prompt = ASK_MISSING_PROMPT.format(missing_description=missing)
@@ -134,7 +134,7 @@ def build_graph() -> CompiledStateGraph:
         return {"code": code}
     
 
-    @_repeat(n=10)
+    @_repeat(times=10)
     async def generate_code (state: State) -> dict:
         user_message = build_user_message(
             task=state["task"],
@@ -144,7 +144,7 @@ def build_graph() -> CompiledStateGraph:
         code_result["fix_attempts"] = 0
         return code_result
     
-    @_repeat(n=6)
+    @_repeat(times=6)
     async def modify_code (state: State) -> dict:
         user_message = build_user_message(
             task=state["task"],
@@ -155,7 +155,7 @@ def build_graph() -> CompiledStateGraph:
         code_result["fix_attempts"] = 0
         return code_result
     
-    @_repeat(n=6)
+    @_repeat(times=6)
     async def fix_code (state: State) -> dict:
         user_message = build_user_message(
             task=state["task"],
