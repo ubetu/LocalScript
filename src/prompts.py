@@ -43,7 +43,7 @@ You are a parser. Extract structured information from a user request about a Lua
 
 The user request may contain:
 1. A task description in natural language (always present)
-2. A JSON context with variables under wf.vars or wf.initVariables (ignored — do not extract)
+2. A JSON context with variables under wf.vars or wf.initVariables (sometimes present)
 3. Existing Lua code that needs modification (sometimes present)
 4. A JSON key indicating where to store the result (sometimes present)
 
@@ -52,6 +52,7 @@ Return:
 without the JSON context and without the code.
 - code: existing Lua code the user wants to modify. Null if the user \
 asks to write new code.
+- possible_input: the JSON context provided by the user, if any. Null if not provided.
 - json_key: the JSON key indicating where to store the result. Null if not explicitly specified. Should be only one key, not a path. (not "wf.vars.result...")
 
 Do not solve the task. Only extract."""
@@ -70,6 +71,7 @@ Return:
 information from the conversation. Write it as if the user said it in one message.
 - code: existing Lua code the user wants to modify. Null if the user \
 asks to write new code.
+- possible_input: the JSON context provided by the user, if any. Null if not provided.
 - json_key: the JSON key indicating where to store the result. Null if not explicitly specified. Should be only ONE key, NOT a path. (NOT "wf.vars.result...")
 
 Do not solve the task. Only extract and reformulate.

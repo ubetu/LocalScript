@@ -1,6 +1,5 @@
 from pydantic import BaseModel, Field
 from langgraph.graph import MessagesState
-from enum import StrEnum
 from .lua import LuaCheckResult, LuaRunResult
 
 
@@ -25,42 +24,20 @@ class State(MessagesState):
 class QuestionsSchema(BaseModel):
     questions: list[str] | None = None
 
+
 class TaskEntities(BaseModel):
     task: str
     code: str | None = None
+    possible_input: str | None = None
     json_key: str | None = None
 
 
 class MessageRequest(BaseModel):
     content: str
-
-
-class Role(StrEnum):
-    USER = "user"
-    SYSTEM = "system"
-
-
-class ConversationMessage(BaseModel):
-    role: Role
-    content: str
-
-
-class WfVarSchema(BaseModel):
-    wf: dict
-
-class SessionCreateRequest(BaseModel):
-    wf_var: WfVarSchema
-
-class SessionCreateResponse(BaseModel):
-    session_id: str
-
-
-class SessionStatus(StrEnum):
-    PENDING = "pending"
-    RUNNING = "running"
-    AWAITING_INPUT = "awaiting_input"
-    DONE = "done"
-    ERROR = "error"
+    session_id: str | None = Field(
+        None,
+        description="Optional session ID for follow-up messages. If not provided, a new session will be created.",
+    )
 
 
 class LuaIssueMessageOut(BaseModel):
@@ -92,20 +69,18 @@ class LuaRunResultOut(BaseModel):
 
 class CodeResult(BaseModel):
     raw_code: str = Field(description="The raw Lua code without wrapper")
-    formatted_output: str = Field(description="JSON-wrapped output: {key: 'lua{...}lua'}")
+    formatted_output: str = Field(
+        description="JSON-wrapped output: {key: 'lua{...}lua'}"
+    )
     static_result: LuaCheckResultOut | None = None
     dynamic_result: LuaRunResultOut | None = None
 
 
 class MessageResponse(BaseModel):
-    status: SessionStatus
-    question: str | None = Field(None, description="Set when status=awaiting_input")
+    question: str | None = Field(
+        None, description="Set when agent needs more info from user"
+    )
     result: CodeResult | None = Field(None, description="Set when status=done")
-
-
-class SessionStatusResponse(BaseModel):
-    session_id: str
-    status: SessionStatus
-    result: CodeResult | None = None
-    question: str | None = None
-    error_detail: str | None = None
+    session_id: str = Field(
+        description="Session ID to be used for follow-up messages. Should be returned in every response."
+    )

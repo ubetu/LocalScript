@@ -88,8 +88,6 @@ def _fmt_messages(messages: list) -> str:
     for m in messages:
         role = type(m).__name__.replace("Message", "").upper()
         content = str(m.content)
-        if len(content) > 500:
-            content = content[:500] + "…"
         parts.append(f"[{role}] {content}")
     return "\n".join(parts)
 
@@ -150,47 +148,29 @@ def _repeat(times: int, fallback=lambda _: dict()):
     return decorator_repeat
 
 
-def _extract_context_from_messages(messages: list) -> str | None:
-    """Extract the JSON context directly from human messages.
-
-    main.py appends '\n\nContext: {json}' to every first user message.
-    Parsing it here avoids asking the LLM to copy a large JSON blob,
-    which local models truncate and produce invalid JSON.
-    """
-    context_marker = "\n\nContext: "
-    for msg in messages:
-        if hasattr(msg, "type") and msg.type == "human":
-            content = msg.content
-            idx = content.find(context_marker)
-            if idx != -1:
-                return content[idx + len(context_marker):]
-    return None
-
-
 def build_graph() -> CompiledStateGraph:
     # EXTRACTION
 
     async def _extract(state: State, system_prompt: str) -> dict:
         messages = [SystemMessage(system_prompt), *state["messages"]]
+        print(messages)
         logger.debug("_extract ← sending to model:\n%s", _fmt_messages(messages))
         response = await llm_client.with_structured_output(TaskEntities).ainvoke(messages)
         assert isinstance(response, TaskEntities)
 
-        possible_input = _extract_context_from_messages(state["messages"])
-
         logger.debug(
             "_extract → received: task=%r, possible_input=%s, code=%s, json_key=%r",
-            response.task[:100] if response.task else None,
-            repr(possible_input[:200]) if possible_input else None,
-            f"{response.code[:80]}…" if response.code else None,
+            response.task if response.task else None,
+            repr(response.possible_input) if response.possible_input else None,
+            f"{response.code}" if response.code else None,
             response.json_key,
         )
         logger.info(
-            f"extract: task={bool(response.task)}, has_code={response.code is not None}, has_possible_input={possible_input is not None}"
+            f"extract: task={bool(response.task)}, has_code={response.code is not None}, has_possible_input={response.possible_input is not None}"
         )
         return {
             "code": response.code,
-            "possible_input": possible_input,
+            "possible_input": response.possible_input,
             "task": response.task,
             "json_key": response.json_key,
             "fix_attempts": 0,
@@ -259,7 +239,7 @@ def build_graph() -> CompiledStateGraph:
 
         logger.debug(
             "_code → raw response:\n%s",
-            response.content[:800] + "…" if len(response.content) > 800 else response.content,
+            response.content 
         )
         code = _parse_code(response.content)
         logger.debug("_code → parsed code: %d lines", code.count("\n") + 1)
