@@ -175,10 +175,7 @@ def build_graph() -> CompiledStateGraph:
     async def first_extract(state: State) -> dict:
         """Extracts info from a first message"""
         logger.debug("entering first_extract")
-        result = await _extract(state, EXTRACT_PROMPT)
-        if state.get("possible_input") is not None:
-            result["possible_input"] = state["possible_input"]
-        return result
+        return await _extract(state, EXTRACT_PROMPT)
 
     @_repeat(times=3)
     async def extract_after_QA(state: State) -> dict:
@@ -187,7 +184,7 @@ def build_graph() -> CompiledStateGraph:
         return await _extract(state, EXTRACT_AFTER_ASK_PROMPT)
 
     def extract_next_round(state: State) -> dict:
-        """Extracts info from next rouns"""
+        """Extracts info from next rounds"""
         logger.debug("entering extract_next_round")
         new_task = state["task"] + f"\nUpdate of task: {state["messages"][-1].content}"
         return {"task": new_task}
@@ -249,7 +246,7 @@ def build_graph() -> CompiledStateGraph:
         logger.debug("entering generate_code")
         user_message = build_user_message(
             task=state["task"],
-            possible_input=state["possible_input"],
+            possible_input=state.get("possible_input"),
         )
         code_result = await _code(GENERATE_CODE_PROMPT, user_message)
         logger.debug("generate_code → produced code (%d lines)", code_result["code"].count("\n") + 1)
@@ -260,7 +257,7 @@ def build_graph() -> CompiledStateGraph:
         logger.debug("entering modify_code")
         user_message = build_user_message(
             task=state["task"],
-            possible_input=state["possible_input"],
+            possible_input=state.get("possible_input"),
             code=state["code"],
         )
         code_result = await _code(MODIFY_CODE_PROMPT, user_message)
@@ -272,11 +269,11 @@ def build_graph() -> CompiledStateGraph:
         logger.info(f"entering fix_code, fix_attempts={state.get('fix_attempts', 0)}")
         user_message = build_user_message(
             task=state["task"],
-            possible_input=state["possible_input"],
+            possible_input=state.get("possible_input"),
             code=state["code"],
-            static_result=state.get("static_result", None),
-            dynamic_result=state.get("dynamic_result", None),
-            review_result=state.get("review_result", None),
+            static_result=state.get("static_result"),
+            dynamic_result=state.get("dynamic_result"),
+            review_result=state.get("review_result"),
         )
 
         code_result = await _code(FIX_CODE_PROMPT, user_message)
@@ -291,7 +288,7 @@ def build_graph() -> CompiledStateGraph:
             pass
 
         dynamic_result = None
-        if state["possible_input"] is not None:
+        if state.get("possible_input"):
             try:
                 dynamic_result = await run_lua(state["code"], state["possible_input"])  # type: ignore
             except Exception:
@@ -384,7 +381,6 @@ def build_graph() -> CompiledStateGraph:
         logger.info(f"format_code: output={formatted}")
         return {"formatted_output": formatted}
 
-    # TODO: if user send existing code, it can be in json format, we want to convert it into common form
     builder = StateGraph(State)
     builder.add_node("first_extract", first_extract)
     builder.add_node("extract_after_QA", extract_after_QA)
