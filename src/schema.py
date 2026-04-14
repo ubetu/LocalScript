@@ -1,3 +1,5 @@
+from typing import Any
+
 from pydantic import BaseModel, Field
 from langgraph.graph import MessagesState
 from .lua import LuaCheckResult, LuaRunResult
@@ -38,6 +40,16 @@ class MessageRequest(BaseModel):
     session_id: str | None = Field(
         None,
         description="Optional session ID for follow-up messages. If not provided, a new session will be created.",
+    )
+    wf_context: dict[str, Any] | None = Field(
+        None,
+        description="Optional wf.vars JSON context (e.g. {\"wf\": {\"vars\": {...}}}). "
+                    "Passed directly to the graph, skipping LLM extraction.",
+    )
+    existing_code: str | None = Field(
+        None,
+        description="Optional pre-existing Lua code in lua{...}lua format. "
+                    "Unwrapped and passed directly to the graph, skipping LLM extraction.",
     )
 
 

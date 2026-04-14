@@ -144,6 +144,15 @@ def wrap_lua_code(key: str, code: str) -> str:
     return json.dumps({key: f"lua{{{code}}}lua"})
 
 
+_LUA_WRAPPER_RE = re.compile(r"^lua\{(.*)\}lua$", re.DOTALL)
+
+
+def unwrap_lua_code(code: str) -> str:
+    """Strips lua{...}lua wrapper from a Lua script string, if present."""
+    match = _LUA_WRAPPER_RE.match(code.strip())
+    return match.group(1) if match else code
+
+
 if __name__ == "__main__":
     # Example usage
     output = """

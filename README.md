@@ -53,7 +53,9 @@ Swagger UI доступен по адресу: `http://localhost:8000/docs`
 ```json
 {
   "content": "Описание задачи или ответ на вопрос агента",
-  "session_id": "optional-session-id"
+  "session_id": "optional-session-id",
+  "wf_context": {"wf": {"vars": {"price": 100}}},
+  "existing_code": "lua{return wf.vars.price * 2}lua"
 }
 ```
 
@@ -61,6 +63,8 @@ Swagger UI доступен по адресу: `http://localhost:8000/docs`
 |------|-----|----------|
 | `content` | `string` | Текст запроса или ответ на уточняющий вопрос |
 | `session_id` | `string?` | ID сессии для продолжения диалога. Если не указан — создаётся новая сессия |
+| `wf_context` | `object?` | JSON-контекст переменных (`wf.vars` / `wf.initVariables`). Передаётся напрямую в граф, минуя LLM-извлечение |
+| `existing_code` | `string?` | Существующий Lua-скрипт в формате `lua{...}lua`. Обёртка снимается автоматически перед передачей в граф |
 
 **Ответ:**
 
@@ -100,13 +104,25 @@ Swagger UI доступен по адресу: `http://localhost:8000/docs`
 
 ### Пример использования
 
-**Простой запрос (curl):**
+**Запрос с контекстом переменных:**
 
 ```bash
 curl -X POST http://localhost:8000/generate \
   -H "Content-Type: application/json" \
   -d '{
-    "content": "Умножить wf.vars.price на wf.vars.quantity и записать результат в переменную total"
+    "content": "Умножить wf.vars.price на wf.vars.quantity и записать результат в переменную total",
+    "wf_context": {"wf": {"vars": {"price": 100, "quantity": 3}}}
+  }'
+```
+
+**Модификация существующего кода:**
+
+```bash
+curl -X POST http://localhost:8000/generate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "Добавь переменную с квадратом числа",
+    "existing_code": "lua{return tonumber(\"5\")}lua"
   }'
 ```
 

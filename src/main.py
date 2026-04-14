@@ -1,3 +1,4 @@
+import json
 import uuid
 
 from fastapi import FastAPI
@@ -5,6 +6,7 @@ from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
 
 from .graph import graph
+from .lua import unwrap_lua_code
 from .schema import (
     CodeResult,
     LuaCheckResultOut,
@@ -107,7 +109,14 @@ async def _invoke(session_id: str, graph_input) -> MessageResponse:
 @app.post("/generate", response_model=MessageResponse)
 async def generate(request: MessageRequest) -> MessageResponse:
     session_id = request.session_id or str(uuid.uuid4())[:8]
-    graph_input = {"messages": [HumanMessage(content=request.content)]}
-    result =  await _invoke(session_id, graph_input)
+    graph_input: dict = {"messages": [HumanMessage(content=request.content)]}
+
+    if request.wf_context is not None:
+        graph_input["possible_input"] = json.dumps(request.wf_context, ensure_ascii=False)
+
+    if request.existing_code is not None:
+        graph_input["code"] = unwrap_lua_code(request.existing_code)
+
+    result = await _invoke(session_id, graph_input)
     return result
 

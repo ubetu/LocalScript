@@ -181,7 +181,14 @@ def build_graph() -> CompiledStateGraph:
     async def first_extract(state: State) -> dict:
         """Extracts info from a first message"""
         logger.debug("entering first_extract")
-        return await _extract(state, EXTRACT_PROMPT)
+        result = await _extract(state, EXTRACT_PROMPT)
+        # Preserve fields that were pre-provided via the API (passed directly in graph_input).
+        # The LLM won't see them in the message, so we must not let extraction overwrite them.
+        if state.get("possible_input") is not None:
+            result["possible_input"] = state["possible_input"]
+        if state.get("code") is not None:
+            result["code"] = state["code"]
+        return result
 
     @_repeat(times=3)
     async def extract_after_QA(state: State) -> dict:

@@ -31,8 +31,9 @@ DEFAULT_TIMEOUT = 600  # seconds per HTTP request
 class TestCase:
     id: str
     title: str
-    wf_var: dict | None
     prompt: str
+    wf_context: dict | None = None
+    existing_code: str | None = None
     expected_patterns: list[str] = field(default_factory=list)
     forbidden_patterns: list[str] = field(default_factory=list)
 
@@ -63,7 +64,8 @@ CASES: list[TestCase] = [
     TestCase(
         id="2.1",
         title="Last element of array",
-        wf_var={
+        prompt="Из полученного списка email получи последний.",
+        wf_context={
             "wf": {
                 "vars": {
                     "emails": [
@@ -74,20 +76,23 @@ CASES: list[TestCase] = [
                 }
             }
         },
-        prompt="Из полученного списка email получи последний.",
         expected_patterns=["wf.vars.emails", "#wf.vars"],
     ),
     TestCase(
         id="2.2",
         title="Attempt counter",
-        wf_var={"wf": {"vars": {"try_count_n": 3}}},
         prompt="Увеличивай значение переменной `try_count_n` на каждой итерации",
+        wf_context={"wf": {"vars": {"try_count_n": 3}}},
         expected_patterns=["wf.vars.try_count_n", "+ 1"],
     ),
     TestCase(
         id="2.3",
         title="Clear variable values",
-        wf_var={
+        prompt=(
+            "Для полученных данных из предыдущего REST запроса очисти значения "
+            "переменных ID, ENTITY_ID, CALL"
+        ),
+        wf_context={
             "wf": {
                 "vars": {
                     "RESTbody": {
@@ -111,16 +116,16 @@ CASES: list[TestCase] = [
                 }
             }
         },
-        prompt=(
-            "Для полученных данных из предыдущего REST запроса очисти значения "
-            "переменных ID, ENTITY_ID, CALL"
-        ),
         expected_patterns=["wf.vars.RESTbody.result", "nil"],
     ),
     TestCase(
         id="2.4",
         title="ISO 8601 time format",
-        wf_var={
+        prompt=(
+            "Преобразуй время из формата `YYYYMMDD` и `HHMMSS` в строку в формате "
+            "ISO 8601 с использованием Lua."
+        ),
+        wf_context={
             "wf": {
                 "vars": {
                     "json": {
@@ -140,16 +145,17 @@ CASES: list[TestCase] = [
                 }
             }
         },
-        prompt=(
-            "Преобразуй время из формата `YYYYMMDD` и `HHMMSS` в строку в формате "
-            "ISO 8601 с использованием Lua."
-        ),
         expected_patterns=["wf.vars.json.IDOC.ZCDF_HEAD", "string.format"],
     ),
     TestCase(
         id="2.5",
         title="Ensure items are arrays",
-        wf_var={
+        prompt=(
+            "Как преобразовать структуру данных так, чтобы все элементы `items` "
+            "в `ZCDF_PACKAGES` всегда были представлены в виде массивов, даже если "
+            "они изначально не являются массивами"
+        ),
+        wf_context={
             "wf": {
                 "vars": {
                     "json": {
@@ -165,11 +171,6 @@ CASES: list[TestCase] = [
                 }
             }
         },
-        prompt=(
-            "Как преобразовать структуру данных так, чтобы все элементы `items` "
-            "в `ZCDF_PACKAGES` всегда были представлены в виде массивов, даже если "
-            "они изначально не являются массивами"
-        ),
         expected_patterns=[
             "wf.vars.json.IDOC.ZCDF_HEAD.ZCDF_PACKAGES",
             "_utils.array",
@@ -178,7 +179,11 @@ CASES: list[TestCase] = [
     TestCase(
         id="2.6",
         title="Filter array by field",
-        wf_var={
+        prompt=(
+            "Отфильтруй элементы из массива, чтобы включить только те, у которых "
+            "есть значения в полях `Discount` или `Markdown`."
+        ),
+        wf_context={
             "wf": {
                 "vars": {
                     "parsedCsv": [
@@ -190,10 +195,6 @@ CASES: list[TestCase] = [
                 }
             }
         },
-        prompt=(
-            "Отфильтруй элементы из массива, чтобы включить только те, у которых "
-            "есть значения в полях `Discount` или `Markdown`."
-        ),
         expected_patterns=[
             "wf.vars.parsedCsv",
             "_utils.array.new",
@@ -204,7 +205,6 @@ CASES: list[TestCase] = [
     TestCase(
         id="2.7",
         title="Add squared variable",
-        wf_var=None,
         prompt="Добавь переменную с квадратом числа",
         expected_patterns=["tonumber", "squared"],
         forbidden_patterns=["wf.vars"],
@@ -212,14 +212,14 @@ CASES: list[TestCase] = [
     TestCase(
         id="2.8",
         title="ISO to Unix timestamp",
-        wf_var={
+        prompt="Конвертируй время в переменной `recallTime` в unix-формат.",
+        wf_context={
             "wf": {
                 "initVariables": {
                     "recallTime": "2023-10-15T15:30:00+00:00"
                 }
             }
         },
-        prompt="Конвертируй время в переменной `recallTime` в unix-формат.",
         expected_patterns=["wf.initVariables.recallTime", "86400"],
         forbidden_patterns=["365.25", "30.44"],
     ),
@@ -228,17 +228,19 @@ CASES: list[TestCase] = [
 
 # ── API helpers ───────────────────────────────────────────────────────────────
 
-def build_content(prompt: str, wf_var: dict | None) -> str:
-    """Combine the user prompt and wf_var context into a single message string."""
-    if wf_var is None:
-        return prompt
-    context_json = json.dumps(wf_var, indent=2, ensure_ascii=False)
-    return f"{prompt}\n\n```json\n{context_json}\n```"
-
-
-def generate(client: httpx.Client, content: str, session_id: str | None = None) -> dict:
+def generate(
+    client: httpx.Client,
+    content: str,
+    wf_context: dict | None = None,
+    existing_code: str | None = None,
+    session_id: str | None = None,
+) -> dict:
     """Call POST /generate and return the parsed response."""
     payload: dict = {"content": content}
+    if wf_context is not None:
+        payload["wf_context"] = wf_context
+    if existing_code is not None:
+        payload["existing_code"] = existing_code
     if session_id is not None:
         payload["session_id"] = session_id
     resp = client.post("/generate", json=payload)
@@ -326,8 +328,12 @@ def run_all(base_url: str, timeout: int) -> list[TestResult]:
         for case in CASES:
             print(f"  Running {case.id}: {case.title} ...", end=" ", flush=True)
             try:
-                content = build_content(case.prompt, case.wf_var)
-                response = generate(client, content)
+                response = generate(
+                    client,
+                    content=case.prompt,
+                    wf_context=case.wf_context,
+                    existing_code=case.existing_code,
+                )
                 result = evaluate(case, response)
             except Exception as exc:
                 result = TestResult(
