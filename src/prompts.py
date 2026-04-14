@@ -70,7 +70,7 @@ Return:
 information from the conversation. Write it as if the user said it in one message.
 - code: existing Lua code the user wants to modify. Null if the user \
 asks to write new code.
-- json_key: the JSON key indicating where to store the result. Null if not explicitly specified. Should be only one key, not a path. (not "wf.vars.result...")
+- json_key: the JSON key indicating where to store the result. Null if not explicitly specified. Should be only ONE key, NOT a path. (NOT "wf.vars.result...")
 
 Do not solve the task. Only extract and reformulate.
  
@@ -201,20 +201,25 @@ end
 return result
 ```
 
+Use _utils.array.new() when building a new array from scratch. \
+Use _utils.array.markAsArray(t) when you need to return an existing table as an array \
+(e.g. after wrapping a non-array value: _utils.array.markAsArray({{val}})). \
+Always use one of these when the result must be a JSON array.
+
 YOU SHOULD NOT MODIFY THE `wf.vars` or `wf.initVariables`.
 If task asks to modify the. You should instead return the new value, WITHOUT modifying the existing variables.
 Example:
 
-Task: Увеличивай значение переменной `try_count_n` на каждой итерации
-Context: {{"wf":{{"vars":{{"try_count_n":3}}}}}}
+Task: Увеличивай значение переменной `example` на каждой итерации
+Context: {{"wf":{{"vars":{{"example":3}}}}}}
 
 ANALYSIS:
-User wants to increment `try_count_n` on each iteration.
-However, I should not modify `wf.vars.try_count_n` directly. Instead, return the new value as `try_count_n + 1`.
+User wants to increment `example` on each iteration.
+However, I should not modify `wf.vars.example` directly. Instead, return the new value as `example + 1`.
 
 CODE:
 ```lua
-return wf.vars.try_count_n + 1
+return wf.vars.example + 1
 ```
 """
  

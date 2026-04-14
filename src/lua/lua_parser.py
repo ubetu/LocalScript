@@ -125,6 +125,7 @@ FORBIDDEN_GLOBALS: set[str] = {
     "os",
     "io",
     "require",
+    "loadstring",
     "dofile",
     "loadfile",
     "load",
@@ -136,6 +137,41 @@ FORBIDDEN_GLOBALS: set[str] = {
     "rawset",
     "setfenv",
     "getfenv",
+}
+
+FORBIDDEN_GLOBAL_HINTS: dict[str, str] = {
+    "os": (
+        "'os' is not available. For date/time handling, parse the ISO string manually "
+        "using string.sub() or string.match() and calculate with arithmetic."
+    ),
+    "io": "'io' is not available. All data must be passed via wf.vars or wf.initVariables.",
+    "require": (
+        "'require' is not allowed. The only available utility is '_utils.array' "
+        "(_utils.array.new(), _utils.array.markAsArray())."
+    ),
+    "loadstring": "'loadstring' is not allowed. Do not use dynamic code execution.",
+    "load": "'load' is not allowed. Do not use dynamic code execution.",
+    "loadfile": "'loadfile' is not allowed. Do not use dynamic code execution.",
+    "dofile": "'dofile' is not allowed. Do not use dynamic code execution.",
+    "debug": "'debug' library is not available in the sandbox.",
+    "coroutine": "'coroutine' is not supported in this environment.",
+    "setmetatable": (
+        "'setmetatable' is not available. Use direct table field assignment instead."
+    ),
+    "getmetatable": "'getmetatable' is not available.",
+    "rawget": "'rawget' is not available. Use direct table indexing: t[key].",
+    "rawset": "'rawset' is not available. Use direct table assignment: t[key] = value.",
+    "setfenv": "'setfenv' is not available.",
+    "getfenv": "'getfenv' is not available.",
+}
+
+FORBIDDEN_CONSTRUCT_HINTS: dict[str, str] = {
+    "Goto": "Use while, for, or repeat...until loops instead of goto.",
+    "Label": "Labels are not allowed. Use loop constructs instead.",
+    "Attribute": (
+        "Lua 5.4 attributes (<const>, <close>) are not supported. "
+        "Use plain local variables."
+    ),
 }
 
 WARN_GLOBALS: set[str] = {
@@ -193,48 +229,33 @@ class LuaASTValidator(ASTRecursiveVisitor):
 
     # -- catch-all for allowed/unknown node types --
 
+    def _forbidden_construct_issue(self, node: Node) -> LuaIssue:
+        name = type(node).__name__
+        hint = FORBIDDEN_CONSTRUCT_HINTS.get(name, "")
+        message = f"Disallowed construct: {name}"
+        if hint:
+            message += f". {hint}"
+        return _make_issue(
+            "FORBIDDEN_CONSTRUCT",
+            LuaIssueSeverity.ERROR,
+            message,
+            line=self._line(node),
+        )
+
     def enter_Node(self, node: Node) -> None:
         if type(node) not in ALLOWED_NODE_TYPES:
-            self.errors.append(
-                _make_issue(
-                    "FORBIDDEN_CONSTRUCT",
-                    LuaIssueSeverity.ERROR,
-                    f"Disallowed construct: {type(node).__name__}",
-                    line=self._line(node),
-                )
-            )
+            self.errors.append(self._forbidden_construct_issue(node))
 
     # -- explicit forbidden constructs --
 
     def enter_Goto(self, node: Node) -> None:
-        self.errors.append(
-            _make_issue(
-                "FORBIDDEN_CONSTRUCT",
-                LuaIssueSeverity.ERROR,
-                f"Disallowed construct: {type(node).__name__}",
-                line=self._line(node),
-            )
-        )
+        self.errors.append(self._forbidden_construct_issue(node))
 
     def enter_Label(self, node: Node) -> None:
-        self.errors.append(
-            _make_issue(
-                "FORBIDDEN_CONSTRUCT",
-                LuaIssueSeverity.ERROR,
-                f"Disallowed construct: {type(node).__name__}",
-                line=self._line(node),
-            )
-        )
+        self.errors.append(self._forbidden_construct_issue(node))
 
     def enter_Attribute(self, node: Node) -> None:
-        self.errors.append(
-            _make_issue(
-                "FORBIDDEN_CONSTRUCT",
-                LuaIssueSeverity.ERROR,
-                f"Disallowed construct: {type(node).__name__}",
-                line=self._line(node),
-            )
-        )
+        self.errors.append(self._forbidden_construct_issue(node))
 
     def _is_global_reference(self, node: Name) -> bool:
         parent = self._parent()
@@ -261,11 +282,15 @@ class LuaASTValidator(ASTRecursiveVisitor):
         line = self._line(node)
 
         if name_id in FORBIDDEN_GLOBALS:
+            hint = FORBIDDEN_GLOBAL_HINTS.get(name_id, "")
+            message = f"Forbidden global '{name_id}'"
+            if hint:
+                message += f". {hint}"
             self.errors.append(
                 _make_issue(
                     "FORBIDDEN_GLOBAL",
                     LuaIssueSeverity.ERROR,
-                    f"Forbidden global '{name_id}'",
+                    message,
                     line=line,
                 )
             )
@@ -287,6 +312,48 @@ class LuaASTValidator(ASTRecursiveVisitor):
                     line=line,
                 )
             )
+
+
+    def enter_Index(self, node: Index) -> None:
+        value = getattr(node, "value", None)
+        idx = getattr(node, "idx", None)
+
+        # _utils.<not array> → forbidden submodule
+        if isinstance(value, Name) and value.id == "_utils":
+            if isinstance(idx, Name) and idx.id != "array":
+                self.errors.append(
+                    _make_issue(
+                        "FORBIDDEN_UTILS",
+                        LuaIssueSeverity.ERROR,
+                        f"'_utils.{idx.id}' does not exist. "
+                        "Only _utils.array.new() and _utils.array.markAsArray(arr) are available.",
+                        line=self._line(node),
+                    )
+                )
+            return
+
+        # _utils.array.<not new|markAsArray> → forbidden method
+        if isinstance(value, Index):
+            outer_value = getattr(value, "value", None)
+            outer_idx = getattr(value, "idx", None)
+            if (
+                isinstance(outer_value, Name)
+                and outer_value.id == "_utils"
+                and isinstance(outer_idx, Name)
+                and outer_idx.id == "array"
+                and isinstance(idx, Name)
+                and idx.id not in ("new", "markAsArray")
+            ):
+                self.errors.append(
+                    _make_issue(
+                        "FORBIDDEN_UTILS",
+                        LuaIssueSeverity.ERROR,
+                        f"'_utils.array.{idx.id}' does not exist. "
+                        "Use _utils.array.new() to create a new array or "
+                        "_utils.array.markAsArray(arr) to mark an existing table as an array.",
+                        line=self._line(node),
+                    )
+                )
 
 
 def validate_ast(code: str) -> LuaCheckResult:
