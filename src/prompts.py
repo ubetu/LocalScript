@@ -43,16 +43,17 @@ You are a parser. Extract structured information from a user request about a Lua
 
 The user request may contain:
 1. A task description in natural language (always present)
-2. A JSON context with variables under wf.vars or wf.initVariables (sometimes present)
-3. Existing Lua code that needs modification (sometimes present)
-4. A JSON key indicating where to store the result (sometimes present)
+2. Existing Lua code that needs modification (sometimes present)
+3. A JSON key indicating where to store the result (sometimes present)
+
+Note: the JSON variable context (wf.vars / wf.initVariables) is provided separately \
+by the system and is NOT part of the user message. Do not look for it in the text.
 
 Return:
-- task: copy the task description exactly as the user wrote it, \
-without the JSON context and without the code.
+- task: copy the task description exactly as the user wrote it, without the code.
 - code: existing Lua code the user wants to modify. Null if the user \
 asks to write new code.
-- possible_input: the JSON context provided by the user, if any. Null if not provided.
+- possible_input: always null. The context is injected by the system, not extracted here.
 - json_key: the JSON key indicating where to store the result. Null if not explicitly specified. Should be only one key, not a path. (not "wf.vars.result...")
 
 Do not solve the task. Only extract."""
@@ -78,7 +79,7 @@ Return:
 information from the conversation. Write it as if the user said it in one message.
 - code: existing Lua code the user wants to modify. Null if the user \
 asks to write new code.
-- possible_input: the JSON context provided by the user, if any. Null if not provided.
+- possible_input: always null. The context is injected by the system, not extracted here.
 - json_key: the JSON key indicating where to store the result. Null if not explicitly specified. Should be only ONE key, NOT a path. (NOT "wf.vars.result...")
 
 Do not solve the task. Only extract and reformulate.
@@ -163,12 +164,13 @@ If the task asks to update a variable, return the new value instead of modifying
 
 {_CODE_RESPONSE_FORMAT}
 
-The user message contains a task description followed by a JSON context.
+The user message contains a task description and, when available, a JSON context under "Possible input:".
 
 Example:
 
 Task: Из полученного списка email получи последний.
-Context: {{"wf":{{"vars":{{"emails":["user1@example.com","user2@example.com","user3@example.com"]}}}}}}
+Possible input:
+{{"wf":{{"vars":{{"emails":["user1@example.com","user2@example.com","user3@example.com"]}}}}}}
 
 ANALYSIS:
 Get the last element of the emails array using the # length operator.
@@ -182,7 +184,8 @@ Example:
 
 Task: Отфильтруй элементы из массива, чтобы включить только те, \
 у которых есть значения в полях Discount или Markdown.
-Context: {{"wf":{{"vars":{{"parsedCsv":[\
+Possible input:
+{{"wf":{{"vars":{{"parsedCsv":[\
 {{"SKU":"A001","Discount":"10%","Markdown":""}},\
 {{"SKU":"A002","Discount":"","Markdown":"5%"}},\
 {{"SKU":"A003","Discount":null,"Markdown":null}},\
@@ -207,7 +210,8 @@ return result
 Example:
 
 Task: Для каждого объекта в результате оставь только поля ID, ENTITY_ID и CALL, остальные удали
-Context: {{"wf":{{"vars":{{"RESTbody":{{"result":[{{"ID":123,"ENTITY_ID":456,"CALL":"x","OTHER":"v"}}]}}}}}}}}
+Possible input:
+{{"wf":{{"vars":{{"RESTbody":{{"result":[{{"ID":123,"ENTITY_ID":456,"CALL":"x","OTHER":"v"}}]}}}}}}}}
 
 ANALYSIS:
 Iterate over the result array. For each item, remove all fields except ID, ENTITY_ID, and CALL by setting them to nil.
@@ -228,7 +232,8 @@ return result
 Example:
 
 Task: Увеличивай значение переменной `example` на каждой итерации
-Context: {{"wf":{{"vars":{{"example":3}}}}}}
+Possible input:
+{{"wf":{{"vars":{{"example":3}}}}}}
 
 ANALYSIS:
 I should not modify `wf.vars.example` directly. Return the incremented value instead.
