@@ -4,10 +4,16 @@ from enum import StrEnum
 from .lua import LuaCheckResult, LuaRunResult
 
 
+class ReviewResult(BaseModel):
+    is_correct: bool
+    concerns: str | None = None
+
+
 class State(MessagesState):
     code: str | None
     static_result: LuaCheckResult
     dynamic_result: LuaRunResult
+    review_result: ReviewResult | None
     task: str
     possible_input: str | None
     fix_attempts: int

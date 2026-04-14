@@ -24,7 +24,7 @@ from .schema import (
 )
 
 import logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 app = FastAPI(
     title="LocalScript API",
@@ -194,7 +194,7 @@ async def send_message(session_id: str, message: MessageRequest) -> MessageRespo
     if session.status == SessionStatus.AWAITING_INPUT:
         return await _invoke(session_id, Command(resume=message.content))
 
-    if session.status in (SessionStatus.DONE, SessionStatus.ERROR):
+    if session.status in (SessionStatus.ERROR):
         raise HTTPException(status_code=409, detail=f"Session already in terminal state: {session.status}")
 
     combined = f"{message.content}\n\nContext: {session.wf_var_json}"

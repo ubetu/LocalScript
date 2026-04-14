@@ -21,7 +21,7 @@ _CODE_RESPONSE_FORMAT = """\
 You must respond in this exact format:
  
 ANALYSIS:
-<1-3 sentences: what the code should do, key details>
+<Think until you understand the task and how to solve it. Write your reasoning step by step. Max 20 sentences.>
  
 CODE:
 ```lua
@@ -73,6 +73,11 @@ asks to write new code.
 - json_key: the JSON key indicating where to store the result. Null if not explicitly specified. Should be only ONE key, NOT a path. (NOT "wf.vars.result...")
 
 Do not solve the task. Only extract and reformulate.
+
+Before asking questions think about what information is missing from the original request that prevents you from writing the code.
+use:
+ANALYSIS:
+<think step by step about what information is missing and what questions to ask to get that information>
  
 Example conversation:
 User: Добавь переменную с квадратом числа
@@ -201,9 +206,9 @@ end
 return result
 ```
 
-Use _utils.array.new() when building a new array from scratch. \
-Use _utils.array.markAsArray(t) when you need to return an existing table as an array \
-(e.g. after wrapping a non-array value: _utils.array.markAsArray({{val}})). \
+Use `_utils.array.new()` when building a new array from scratch. \
+Use `_utils.array.markAsArray(t)` when you need to return an existing table as an array \
+(e.g. after wrapping a non-array value: `_utils.array.markAsArray({{val}}))`. \
 Always use one of these when the result must be a JSON array.
 
 YOU SHOULD NOT MODIFY THE `wf.vars` or `wf.initVariables`.
@@ -245,6 +250,48 @@ Return the COMPLETE modified code, not just the changes.
 # Fix code (after validation failure)
 # ──────────────────────────────────────────────
  
+REVIEW_CODE_PROMPT = """\
+You are a Lua code reviewer. Your job is to check whether the code correctly \
+solves the given task.
+
+You will receive:
+- The task description
+- The possible input (JSON context)
+- The generated Lua code
+- The output produced by running the code with the given input (if available)
+
+The code should follow the platform rules and solve the task as specified.
+PLATFORM RULES:
+{_PLATFORM_RULES}
+
+Think step by step before making your judgment:
+Step 1. Restate what the task is asking for in one sentence.
+Step 2. Read through the code line by line and describe what it actually does.
+Step 3. Compare the actual output with what the task requires.
+Step 4. Identify any discrepancy between what the task asks and what the code produces.
+Step 5. Think whether you overcomplicate the thinking process. If the task is simple and the code is straightforward, maybe it is correct after all. 
+
+It's OK, when we return, instead of modifying global variables, as it is forbidden to modify wf.vars. The code should return the new value instead.
+
+If the code correctly solves the task, set is_correct to true and concerns to null.
+If the code does NOT correctly solve the task, set is_correct to false and \
+describe the specific problem in concerns. Be concrete: say what the code does \
+wrong and what it should do instead. Cite the exact lines of code that are problematic. If there are multiple issues, list them all. \
+Say where in the line does the problem occur (e.g. "in the condition of the if statement", "when accessing the variable X", "when returning the result", etc.).
+
+Also check specifically for the array misuse issue,
+Advice to use _utils.array.new() and _utils.array.markAsArray() when the something should be an array,
+
+
+Do NOT report:
+- Style issues, variable naming, or formatting
+- Edge cases not covered by the provided input
+- Performance concerns
+- Static analysis issues (those are checked separately)
+
+Focus ONLY on whether the code produces the correct result for the given task."""
+
+
 FIX_CODE_PROMPT = f"""\
 You are a Lua programmer.
  
@@ -255,4 +302,6 @@ and error details.
 Fix only the reported errors.
 Change as little as possible. Do not rewrite the entire code.
  
-{_CODE_RESPONSE_FORMAT}"""
+{_CODE_RESPONSE_FORMAT}
+addtitionally in thinking process you should printout promblems and code snippets, bade code snippets and fiexed code snippets for each problem.
+You should not fix problems that are not reported by the reviewer."""

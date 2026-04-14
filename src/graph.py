@@ -10,7 +10,7 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.errors import GraphInterrupt
 from langgraph.types import interrupt, Command
 
-from .schema import State, QuestionsSchema, TaskEntities
+from .schema import State, QuestionsSchema, TaskEntities, ReviewResult
 from .prompts import (
     ASK_MISSING_PROMPT,
     ASK_CLARIFY_PROMPT,
@@ -18,6 +18,7 @@ from .prompts import (
     GENERATE_CODE_PROMPT,
     MODIFY_CODE_PROMPT,
     FIX_CODE_PROMPT,
+    REVIEW_CODE_PROMPT,
     EXTRACT_AFTER_ASK_PROMPT,
 )
 from .client import llm_client
@@ -25,6 +26,10 @@ from .lua import LuaCheckResult, LuaRunResult, run_lua, run_luacheck, wrap_lua_c
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+logger.propagate = False
+_handler = logging.StreamHandler()
+_handler.setFormatter(logging.Formatter("%(levelname)s:%(name)s:%(message)s"))
+logger.addHandler(_handler)
 
 MAX_FIX_TRIES = 10
 
@@ -35,6 +40,7 @@ def build_user_message(
     code: str | None = None,
     static_result: LuaCheckResult | None = None,
     dynamic_result: LuaRunResult | None = None,
+    review_result: ReviewResult | None = None,
 ) -> str:
     """Build user message for code nodes of the graph. All inputs should be getted from the state."""
     parts = [f"Task: {task}"]
@@ -65,6 +71,13 @@ def build_user_message(
             text += f" on code line: {dynamic_result.line}\n"
         text += f"has an error: {dynamic_result.error}"
         parts.append(text)
+
+    if review_result and not review_result.is_correct and review_result.concerns:
+        parts.append(
+            f"Code review concerns:\n{review_result.concerns}\n\n"
+            "The code runs without errors but does not correctly solve the task. "
+            "Fix the logic to address the concerns above."
+        )
 
     return "\n\n".join(parts)
 
@@ -284,11 +297,13 @@ def build_graph() -> CompiledStateGraph:
             task=state["task"],
             possible_input=state["possible_input"],
             code=state["code"],
-            static_result=state["static_result"],
-            dynamic_result=state["dynamic_result"],
+            static_result=state.get("static_result", None),
+            dynamic_result=state.get("dynamic_result", None),
+            review_result=state.get("review_result", None),
         )
 
         code_result = await _code(FIX_CODE_PROMPT, user_message)
+        code_result["review_result"] = None
         logger.debug("fix_code → produced code (%d lines)", code_result["code"].count("\n") + 1)
         return code_result
 
@@ -324,8 +339,11 @@ def build_graph() -> CompiledStateGraph:
         if (static_result is None or static_result.passed) and (
             dynamic_result is None or dynamic_result.success
         ):
-            logger.info("test: all checks passed, going to format_code")
-            return Command(goto="format_code")
+            logger.info("test: all checks passed, going to review")
+            return Command(
+                update={"dynamic_result": dynamic_result},
+                goto="review",
+            )
         fix_attempts = state.get("fix_attempts", 0) + 1
         if fix_attempts >= MAX_FIX_TRIES:
             logger.warning(
@@ -343,6 +361,38 @@ def build_graph() -> CompiledStateGraph:
             },
             goto="fix_code",
         )
+
+    @_repeat(times=3)
+    async def review(state: State) -> dict:
+        logger.debug("entering review")
+        parts = [f"Task: {state['task']}"]
+        if state.get("possible_input"):
+            parts.append(f"Possible input:\n{state['possible_input']}")
+        parts.append(f"Code:\n```lua\n{state['code']}\n```")
+
+        dynamic_result = state.get("dynamic_result")
+        if dynamic_result and dynamic_result.output:
+            parts.append(f"Output produced by running the code:\n{dynamic_result.output}")
+
+        user_message = "\n\n".join(parts)
+
+        response = await llm_client.with_structured_output(ReviewResult).ainvoke(
+            [SystemMessage(REVIEW_CODE_PROMPT), HumanMessage(user_message)]
+        )
+        assert isinstance(response, ReviewResult)
+        logger.info(f"review: is_correct={response.is_correct}, concerns={response.concerns}")
+        return {"review_result": response}
+
+    def after_review(state: State) -> str:
+        review_result = state.get("review_result")
+        if review_result and not review_result.is_correct:
+            fix_attempts = state.get("fix_attempts", 0)
+            if fix_attempts >= MAX_FIX_TRIES:
+                logger.warning("review: concerns found but max fix attempts reached, proceeding to format")
+                return "format_code"
+            logger.info(f"review: concerns found, routing to fix_code (attempt {fix_attempts}/{MAX_FIX_TRIES})")
+            return "fix_code"
+        return "format_code"
 
     def format_code(state: State) -> dict:
         logger.info(
@@ -364,6 +414,7 @@ def build_graph() -> CompiledStateGraph:
     builder.add_node("modify_code", modify_code)
     builder.add_node("fix_code", fix_code)
     builder.add_node("test", test)
+    builder.add_node("review", review)
     builder.add_node("format_code", format_code)
 
     builder.add_conditional_edges(
@@ -371,6 +422,7 @@ def build_graph() -> CompiledStateGraph:
         lambda state: len(state["messages"]) > 1,
         {True: "extract_next_round", False: "first_extract"},
     )
+    builder.add_edge("extract_next_round", "modify_code")
     builder.add_conditional_edges(
         "first_extract",
         lambda state: state.get("possible_input") is None,
@@ -386,6 +438,11 @@ def build_graph() -> CompiledStateGraph:
     builder.add_edge("generate_code", "test")
     builder.add_edge("modify_code", "test")
     builder.add_edge("fix_code", "test")
+    builder.add_conditional_edges(
+        "review",
+        after_review,
+        {"fix_code": "fix_code", "format_code": "format_code"},
+    )
     builder.add_edge("format_code", END)
 
     serde = JsonPlusSerializer(allowed_msgpack_modules=[
@@ -394,6 +451,7 @@ def build_graph() -> CompiledStateGraph:
         ("src.lua.lua_utils", "LuaIssue"),
         ("src.lua.lua_utils", "LuaCheckResult"),
         ("src.lua.lua_tests", "LuaRunResult"),
+        ("src.schema", "ReviewResult"),
     ])
     return builder.compile(checkpointer=MemorySaver(serde=serde))
 
