@@ -159,18 +159,12 @@ def build_graph() -> CompiledStateGraph:
         assert isinstance(response, TaskEntities)
 
         logger.debug(
-            "_extract → received: task=%r, possible_input=%s, code=%s, json_key=%r",
+            "_extract → received: task=%r, json_key=%r",
             response.task if response.task else None,
-            repr(response.possible_input) if response.possible_input else None,
-            f"{response.code}" if response.code else None,
             response.json_key,
         )
-        logger.info(
-            f"extract: task={bool(response.task)}, has_code={response.code is not None}, has_possible_input={response.possible_input is not None}"
-        )
+        logger.info(f"extract: task={bool(response.task)}")
         return {
-            "code": response.code,
-            "possible_input": response.possible_input,
             "task": response.task,
             "json_key": response.json_key,
             "fix_attempts": 0,
@@ -182,12 +176,8 @@ def build_graph() -> CompiledStateGraph:
         """Extracts info from a first message"""
         logger.debug("entering first_extract")
         result = await _extract(state, EXTRACT_PROMPT)
-        # Preserve fields that were pre-provided via the API (passed directly in graph_input).
-        # The LLM won't see them in the message, so we must not let extraction overwrite them.
         if state.get("possible_input") is not None:
             result["possible_input"] = state["possible_input"]
-        if state.get("code") is not None:
-            result["code"] = state["code"]
         return result
 
     @_repeat(times=3)

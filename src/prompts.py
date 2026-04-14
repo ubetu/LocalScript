@@ -5,6 +5,7 @@ Platform rules:
 You return raw Lua code only, without the lua{...}lua wrapper.
 - All declared workflow variables are in wf.vars
 - Startup variables (from the variables input) are in wf.initVariables
+- Do not modify wf.vars or wf.initVariables. Scripts must return the computed value.
 - Do not use JsonPath. Access data directly: wf.vars.myVar
 - The ONLY available _utils methods are:
   - _utils.array.new() — create a new empty array
@@ -43,17 +44,14 @@ You are a parser. Extract structured information from a user request about a Lua
 
 The user request may contain:
 1. A task description in natural language (always present)
-2. Existing Lua code that needs modification (sometimes present)
-3. A JSON key indicating where to store the result (sometimes present)
+2. A JSON key indicating where to store the result (sometimes present)
 
-Note: the JSON variable context (wf.vars / wf.initVariables) is provided separately \
-by the system and is NOT part of the user message. Do not look for it in the text.
+Note: the JSON variable context (wf.vars / wf.initVariables) and any existing Lua code \
+are provided separately by the system and are NOT part of the user message. \
+Do not look for them in the text.
 
 Return:
-- task: copy the task description exactly as the user wrote it, without the code.
-- code: existing Lua code the user wants to modify. Null if the user \
-asks to write new code.
-- possible_input: always null. The context is injected by the system, not extracted here.
+- task: copy the task description exactly as the user wrote it.
 - json_key: the JSON key indicating where to store the result. Null if not explicitly specified. Should be only one key, not a path. (not "wf.vars.result...")
 
 Do not solve the task. Only extract."""
@@ -67,29 +65,27 @@ EXTRACT_AFTER_ASK_PROMPT = """\
 You are a parser. The user was asked clarifying questions and has answered them. \
 Combine the original request and the answers into a complete task description.
 
-In the reasoning field, think step by step before filling task, code, possible_input, and json_key:
+In the reasoning field, think step by step before filling task and json_key:
 1. What was the original task asking for?
 2. What questions were asked?
 3. What did the user answer to each question?
 4. How do the answers complete or change the original task?
 5. What is the final combined task in one sentence?
 
+Note: existing Lua code is provided separately by the system. Do not extract it from the conversation.
+
 Return:
 - task: a single clear task description that includes all relevant \
 information from the conversation. Write it as if the user said it in one message.
-- code: existing Lua code the user wants to modify. Null if the user \
-asks to write new code.
-- possible_input: always null. The context is injected by the system, not extracted here.
 - json_key: the JSON key indicating where to store the result. Null if not explicitly specified. Should be only ONE key, NOT a path. (NOT "wf.vars.result...")
 
 Do not solve the task. Only extract and reformulate.
 
 Example conversation:
 User: Добавь переменную с квадратом числа
-AI: 1. Какого числа? 2. Предоставьте существующий код.
-User: Числа 5, код: return tonumber('5')
+AI: 1. Какого числа?
+User: Числа 5
 Result task: Добавь переменную с квадратом числа 5
-Result code: return tonumber('5')
 
 Example conversation:
 User: Отфильтруй массив по полю
@@ -158,9 +154,6 @@ Use `_utils.array.new()` when building a new array from scratch. \
 Use `_utils.array.markAsArray(t)` when you need to return an existing table as an array \
 (e.g. after wrapping a non-array value: `_utils.array.markAsArray({{val}})`). \
 Always use one of these when the result must be a JSON array.
-
-Do not modify `wf.vars` or `wf.initVariables`. \
-If the task asks to update a variable, return the new value instead of modifying it directly.
 
 {_CODE_RESPONSE_FORMAT}
 
@@ -376,7 +369,7 @@ Platform rules:
 
 Think step by step before making your judgment:
 Step 1. Restate what the task is asking for in one sentence.
-Step 2. Read through the code line by line and describe what it actually does.
+Step 2. Read through the code line by line and describe what it actually does. For boolean conditions, substitute example values from the input and trace the result explicitly.
 Step 3. Compare the actual output with what the task requires.
 Step 4. Identify any discrepancy between what the task asks and what the code produces.
 Step 5. Think whether you overcomplicate the thinking process. If the task is simple and the code is straightforward, maybe it is correct after all.
@@ -397,7 +390,65 @@ Do NOT report:
 - Static analysis issues (those are checked separately)
 - Returning a new value instead of modifying wf.vars (direct modification is forbidden — this is correct)
 
-Focus ONLY on whether the code produces the correct result for the given task."""
+Focus ONLY on whether the code produces the correct result for the given task.
+
+Example (correct code):
+
+Task: Отфильтруй элементы из массива, чтобы включить только те, у которых есть значения в полях Discount или Markdown.
+Possible input:
+{{"wf":{{"vars":{{"parsedCsv":[{{"SKU":"A001","Discount":"10%","Markdown":""}},{{"SKU":"A002","Discount":"","Markdown":"5%"}},{{"SKU":"A003","Discount":null,"Markdown":null}}]}}}}}}
+
+Code:
+```lua
+local result = _utils.array.new()
+local items = wf.vars.parsedCsv
+for _, item in ipairs(items) do
+    if (item.Discount ~= "" and item.Discount ~= nil) or (item.Markdown ~= "" and item.Markdown ~= nil) then
+        table.insert(result, item)
+    end
+end
+return result
+```
+
+Step 1. Keep only parsedCsv items where Discount or Markdown has a non-empty, non-nil value.
+Step 2. Condition: (Discount ~= "" and Discount ~= nil) or (Markdown ~= "" and Markdown ~= nil).
+  A001: Discount="10%" → "10%" ~= "" ✓, "10%" ~= nil ✓ → left side true. Include.
+  A002: Discount="" → "" ~= "" ✗ → left side false. Markdown="5%" → "5%" ~= "" ✓, "5%" ~= nil ✓ → right side true. Include.
+  A003: Discount=nil → nil ~= "" ✓, nil ~= nil ✗ → left side false. Markdown=nil → same → right side false. Exclude.
+Step 3. Result: [A001, A002]. Matches the task.
+Step 4. No discrepancy.
+Step 5. Simple filter, code is straightforward and correct.
+
+is_correct: true
+concerns: null
+
+Example (wrong code):
+
+Task: Верни имена пользователей с ролью "admin"
+Possible input:
+{{"wf":{{"vars":{{"users":[{{"name":"Alice","role":"admin"}},{{"name":"Bob","role":"user"}}]}}}}}}
+
+Code:
+```lua
+local result = _utils.array.new()
+for _, user in ipairs(wf.vars.users) do
+    if user.role ~= "admin" then
+        table.insert(result, user.name)
+    end
+end
+return result
+```
+
+Step 1. Return an array of names of users whose role is "admin".
+Step 2. Condition on line 3: user.role ~= "admin".
+  Alice: role="admin" → "admin" ~= "admin" → false. Not included.
+  Bob: role="user" → "user" ~= "admin" → true. Included.
+Step 3. Result: ["Bob"]. Task requires ["Alice"].
+Step 4. Condition is inverted — ~= excludes admins instead of keeping them.
+Step 5. Clear logic error.
+
+is_correct: false
+concerns: "Line 3: condition `user.role ~= \"admin\"` is inverted — it excludes admins and keeps non-admins. Change ~= to ==: `if user.role == \"admin\" then`." """
 
 FIX_CODE_PROMPT = f"""\
 You are a Lua programmer.

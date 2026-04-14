@@ -115,7 +115,13 @@ async def generate(request: MessageRequest) -> MessageResponse:
         graph_input["possible_input"] = json.dumps(request.wf_context, ensure_ascii=False)
 
     if request.existing_code is not None:
-        graph_input["code"] = unwrap_lua_code(request.existing_code)
+        code = unwrap_lua_code(request.existing_code)
+        if request.session_id is None:
+            graph_input["code"] = code
+        else:
+            graph_input["messages"] = [HumanMessage(
+                content=request.content + f"\n\nExisting code:\n```lua\n{code}\n```"
+            )]
 
     result = await _invoke(session_id, graph_input)
     return result

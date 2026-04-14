@@ -30,8 +30,6 @@ class QuestionsSchema(BaseModel):
 class TaskEntities(BaseModel):
     reasoning: str = Field(description="Step-by-step analysis before extracting fields.")
     task: str = Field(description="The task description exactly as the user wrote it, without JSON context and without code.")
-    code: str | None = Field(None, description="Existing Lua code the user wants to modify. Null if the user asks to write new code.")
-    possible_input: str | None = Field(None, description="The JSON context provided by the user (wf.vars / wf.initVariables). Null if not provided.")
     json_key: str | None = Field(None, description="Single JSON key indicating where to store the result (e.g. 'result'). Not a path. Null if not specified.")
 
 
