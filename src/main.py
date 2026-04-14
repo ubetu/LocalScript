@@ -1,9 +1,8 @@
-import json
 import uuid
-from dataclasses import dataclass
 
 from fastapi import FastAPI
 from langchain_core.messages import HumanMessage
+from langchain_core.runnables import RunnableConfig
 
 from .graph import graph
 from .schema import (
@@ -28,7 +27,7 @@ app = FastAPI(
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _config(session_id: str) -> dict:
+def _config(session_id: str) -> RunnableConfig:
     return {"configurable": {"thread_id": session_id}}
 
 
