@@ -4,8 +4,8 @@ from .lua import LuaCheckResult, LuaRunResult
 
 
 class ReviewResult(BaseModel):
-    is_correct: bool
-    concerns: str | None = None
+    is_correct: bool = Field(description="True if the code correctly solves the task, false otherwise.")
+    concerns: str | None = Field(None, description="What the code does wrong and what it should do instead. Cite specific lines. Null if is_correct is true.")
 
 
 class State(MessagesState):
@@ -18,18 +18,19 @@ class State(MessagesState):
     fix_attempts: int
     json_key: str | None
     formatted_output: str | None
+    qa_performed: bool
 
 
-# TODO: improve it
 class QuestionsSchema(BaseModel):
-    questions: list[str] | None = None
-
+    reasoning: str = Field(description="Step-by-step analysis before deciding whether to ask questions")
+    questions: list[str] | None = Field(None, description="Clarifying questions to ask the user. Null or empty if the task is clear enough to write code.")
 
 class TaskEntities(BaseModel):
-    task: str
-    code: str | None = None
-    possible_input: str | None = None
-    json_key: str | None = None
+    reasoning: str = Field(description="Step-by-step analysis before extracting fields.")
+    task: str = Field(description="The task description exactly as the user wrote it, without JSON context and without code.")
+    code: str | None = Field(None, description="Existing Lua code the user wants to modify. Null if the user asks to write new code.")
+    possible_input: str | None = Field(None, description="The JSON context provided by the user (wf.vars / wf.initVariables). Null if not provided.")
+    json_key: str | None = Field(None, description="Single JSON key indicating where to store the result (e.g. 'result'). Not a path. Null if not specified.")
 
 
 class MessageRequest(BaseModel):

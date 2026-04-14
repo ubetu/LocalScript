@@ -174,6 +174,7 @@ def build_graph() -> CompiledStateGraph:
             "task": response.task,
             "json_key": response.json_key,
             "fix_attempts": 0,
+            "qa_performed": False,
         }
 
     @_repeat(times=6, fallback=lambda state, _: {"task": state["messages"]})
@@ -191,7 +192,8 @@ def build_graph() -> CompiledStateGraph:
     def extract_next_round(state: State) -> dict:
         """Extracts info from next rouns"""
         logger.debug("entering extract_next_round")
-        return {"task": state["messages"][-1].content}
+        new_task = state["task"] + f"\nUpdate of task: {state["messages"][-1].content}"
+        return {"task": new_task}
 
     # QA
 
@@ -210,7 +212,7 @@ def build_graph() -> CompiledStateGraph:
             logger.debug("_ask → model questions:\n%s", response_str)
             answer = interrupt(response_str)
             logger.debug("_ask ← user answered: %r", answer[:300] if len(answer) > 300 else answer)
-            return {"messages": [AIMessage(response_str), HumanMessage(answer)]}
+            return {"messages": [AIMessage(response_str), HumanMessage(answer)], "qa_performed": True}
         else:
             logger.info("ask: no questions needed, skipping")
             logger.debug("_ask → model returned no questions, skipping interrupt")
@@ -253,7 +255,6 @@ def build_graph() -> CompiledStateGraph:
             possible_input=state["possible_input"],
         )
         code_result = await _code(GENERATE_CODE_PROMPT, user_message)
-        code_result["fix_attempts"] = 0
         logger.debug("generate_code → produced code (%d lines)", code_result["code"].count("\n") + 1)
         return code_result
 
@@ -266,7 +267,6 @@ def build_graph() -> CompiledStateGraph:
             code=state["code"],
         )
         code_result = await _code(MODIFY_CODE_PROMPT, user_message)
-        code_result["fix_attempts"] = 0
         logger.debug("modify_code → produced code (%d lines)", code_result["code"].count("\n") + 1)
         return code_result
 
@@ -283,7 +283,6 @@ def build_graph() -> CompiledStateGraph:
         )
 
         code_result = await _code(FIX_CODE_PROMPT, user_message)
-        code_result["review_result"] = None
         logger.debug("fix_code → produced code (%d lines)", code_result["code"].count("\n") + 1)
         return code_result
 
@@ -374,6 +373,11 @@ def build_graph() -> CompiledStateGraph:
             return "fix_code"
         return "format_code"
 
+    def after_clarify(state: State) -> str:
+        if state.get("qa_performed", False):
+            return "extract_after_QA"
+        return "generate_code" if state.get("code") is None else "modify_code"
+
     def format_code(state: State) -> dict:
         logger.info(
             f"format_code: formatting output, code length={len(state['code'])} chars" # type: ignore
@@ -409,7 +413,11 @@ def build_graph() -> CompiledStateGraph:
         {True: "ask_missing_info", False: "ask_to_clarify"},
     )
     builder.add_edge("ask_missing_info", "ask_to_clarify")
-    builder.add_edge("ask_to_clarify", "extract_after_QA")
+    builder.add_conditional_edges(
+        "ask_to_clarify",
+        after_clarify,
+        {"extract_after_QA": "extract_after_QA", "generate_code": "generate_code", "modify_code": "modify_code"},
+    )
     builder.add_conditional_edges(
         "extract_after_QA",
         lambda state: state.get("code") is None,
