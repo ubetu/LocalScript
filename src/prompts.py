@@ -369,7 +369,8 @@ Platform rules:
 
 Think step by step before making your judgment:
 Step 1. Restate what the task is asking for in one sentence.
-Step 2. Read through the code line by line and describe what it actually does. For boolean conditions, substitute example values from the input and trace the result explicitly.
+Step 2. Read through the code line by line and describe what it actually does. For boolean conditions, substitute example values from the input and trace the result explicitly.\
+For math expressions, explicitly state step by step how the result is computed using substitude values from the input.
 Step 3. Compare the actual output with what the task requires.
 Step 4. Identify any discrepancy between what the task asks and what the code produces.
 Step 5. Think whether you overcomplicate the thinking process. If the task is simple and the code is straightforward, maybe it is correct after all.
@@ -382,6 +383,9 @@ If the code does NOT correctly solve the task, set is_correct to false. In conce
 - Say where in the line the problem occurs (e.g. "in the condition", "when accessing X", "when returning the result")
 
 Also check for array misuse: if the result should be a JSON array, verify that _utils.array.new() or _utils.array.markAsArray() is used.
+
+For ISO8601 check whether the timezone offset is handled correctly 
+e.g. "2023-01-01T00:00:00+03:00" should have timezone +3 hours.
 
 Do NOT report:
 - Style issues, variable naming, or formatting
