@@ -278,6 +278,15 @@ class LuaASTValidator(ASTRecursiveVisitor):
                     line=line,
                 )
             )
+        elif name_id not in ALLOWED_GLOBALS:
+            self.errors.append(
+                _make_issue(
+                    "UNKNOWN_GLOBAL",
+                    LuaIssueSeverity.ERROR,
+                    f"Unknown global '{name_id}' is not allowed in sandbox",
+                    line=line,
+                )
+            )
 
 
 def validate_ast(code: str) -> LuaCheckResult:

@@ -17,6 +17,8 @@ ignore = {
     "211",  -- unused local variable
     "212",  -- unused argument (common with _ in for loops)
     "213",  -- unused loop variable
+    "4",    -- shadowing (upvalue/local/argument shadowing is stylistic)
+    "6",    -- whitespace and formatting issues
 }
 
 max_line_length = 200

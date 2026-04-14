@@ -26,7 +26,7 @@ from .lua import LuaCheckResult, LuaRunResult, run_lua, run_luacheck, wrap_lua_c
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-MAX_FIX_TRIES = 5
+MAX_FIX_TRIES = 10
 
 
 def build_user_message(
@@ -44,11 +44,11 @@ def build_user_message(
         parts.append(f"Current code:\n```lua\n{code}\n```")
     if static_result and not static_result.passed:
         errors = [
-            f"- {error.type}: {error.message}, line {error.message.line}, column {error.message.column}"
+            f"- {error.type} L{error.message.line}: {error.message.message}"
             for error in static_result.errors
         ]
         warnings = [
-            f"- {warning.type}: {warning.message}, line {warning.message.line}, column {warning.message.column}"
+            f"- {warning.type} L{warning.message.line}: {warning.message.message}"
             for warning in static_result.warnings
         ]
         if errors or warnings:
@@ -104,7 +104,11 @@ def _strip_fences(code: str) -> str:
     """Remove any stray markdown fence markers that leaked into extracted code."""
     code = re.sub(r"^```(?:lua)?\s*\n?", "", code)
     code = re.sub(r"\n?```\s*$", "", code)
-    return code.strip()
+    code = code.strip()
+    # Strip trailing whitespace from each line (prevents W612 luacheck warnings
+    # that models generate but can never reliably fix in a fix loop).
+    code = "\n".join(line.rstrip() for line in code.splitlines())
+    return code
 
 
 def _repeat(times: int, fallback=lambda _: dict()):
