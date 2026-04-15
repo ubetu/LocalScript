@@ -34,7 +34,7 @@ if os.getenv("LOCALSCRIPT_DEBUG"):
     handler.setFormatter(logging.Formatter("%(levelname)s:%(name)s:%(message)s"))
     logger.addHandler(handler)
 
-MAX_FIX_TRIES = 10
+MAX_FIX_TRIES = 15
 
 
 def build_user_message(
