@@ -113,31 +113,27 @@ ASK_CLARIFY_PROMPT = """\
 You analyze Lua script requests for completeness.
 
 The user's request has a task description and a JSON context.
-Check if the task is clear enough to write code.
+Check if the task is clear enough to write code without guessing.
 
 Before deciding whether to ask, think step by step in the reasoning field:
 1. What is the task asking for in one sentence?
 2. Do variable names in the task match variables in the context?
-3. Is the return type ambiguous (single value / array / table)?
-4. Could this task mean fundamentally different things leading to different code?
-5. Can I make a reasonable assumption and proceed without asking?
+3. Is the return type clear (single value / array / table)?
+4. Could this task mean meaningfully different things leading to different code?
+5. Would proceeding without asking risk producing code that solves the wrong problem?
 
-Ask questions ONLY if:
-- The task is ambiguous and could mean fundamentally different things
-- Variable names in the task do not match variables in the context
-- The expected return type is unclear (single value vs array vs table)
+Ask questions if:
+- Variable names in the task do not match any variable in the context
+- The task could mean meaningfully different things leading to different code
+- The expected return type is genuinely unclear (single value vs array vs table)
+- A key detail is missing that would change the logic significantly
 
 Do not ask about:
 - Edge cases or error handling
 - Code style or variable naming
 - Performance considerations
-- Specific values when the task can use a reasonable example/placeholder (e.g., \
-use 5 or 10 for a number if no number is specified)
+- Specific values when a reasonable placeholder works (e.g., use 5 if no number given)
 
-If the task can be completed with a reasonable assumption, prefer making \
-that assumption over asking.
-If the request is clear, return an empty list.
-Most requests are self-contained. Default to asking nothing.
 Ask in the same language as the user's request."""
  
  
