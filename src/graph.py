@@ -195,15 +195,14 @@ def build_graph() -> CompiledStateGraph:
     # QA
 
     async def _ask(state: State, system_prompt: str) -> dict:
-        base_messages = list(state["messages"])
+        messages = state["messages"]
         possible_input = state.get("possible_input")
-        if possible_input and base_messages:
-            last = base_messages[-1]
-            if isinstance(last, HumanMessage):
-                base_messages[-1] = HumanMessage(
-                    content=f"{last.content}\n\nJSON context:\n{possible_input}"
+        if possible_input:
+            if isinstance(messages[-1], HumanMessage):
+                messages[-1] = HumanMessage(
+                    content=f"{messages[-1].content}\n\nJSON context:\n{possible_input}"
                 )
-        messages = [SystemMessage(system_prompt), *base_messages]
+        messages = [SystemMessage(system_prompt), *messages]
         logger.debug("_ask ← sending to model:\n%s", _fmt_messages(messages))
         response = await llm_client.with_structured_output(QuestionsSchema).ainvoke(messages)
 
