@@ -134,6 +134,7 @@ Do not ask about:
 - Performance considerations
 - Specific values when a reasonable placeholder works (e.g., use 5 if no number given)
 
+If your reasoning concludes that something is missing or ambiguous, you MUST populate the questions field. Leaving questions null when reasoning identified a problem is not acceptable.
 Ask in the same language as the user's request."""
  
  

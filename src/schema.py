@@ -25,7 +25,7 @@ class State(MessagesState):
 
 class QuestionsSchema(BaseModel):
     reasoning: str = Field(description="Step-by-step analysis before deciding whether to ask questions")
-    questions: list[str] | None = Field(None, description="Clarifying questions to ask the user. Null or empty if the task is clear enough to write code.")
+    questions: list[str] | None = Field(None, description="Clarifying questions to ask the user. If reasoning identified missing or ambiguous information, this MUST be a non-empty list. Null only if the task is fully clear and no questions are needed.")
 
 class TaskEntities(BaseModel):
     reasoning: str = Field(description="Step-by-step analysis before extracting fields.")
