@@ -205,6 +205,7 @@ def build_graph() -> CompiledStateGraph:
         messages = [SystemMessage(system_prompt), *messages]
         logger.debug("_ask ← sending to model:\n%s", _fmt_messages(messages))
         response = await llm_client.with_structured_output(QuestionsSchema).ainvoke(messages)
+        logger.debug("_ask → received: %r", response)
 
         assert isinstance(response, QuestionsSchema)
 
