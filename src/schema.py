@@ -78,20 +78,22 @@ class LuaRunResultOut(BaseModel):
     column: int | None = None
 
 
-class CodeResult(BaseModel):
-    raw_code: str = Field(description="The raw Lua code without wrapper")
-    formatted_output: str = Field(
-        description="JSON-wrapped output: {key: 'lua{...}lua'}"
-    )
+class DebugInfo(BaseModel):
+    raw_code: str = Field(description="Raw Lua code without lua{...}lua wrapper")
     static_result: LuaCheckResultOut | None = None
     dynamic_result: LuaRunResultOut | None = None
 
 
 class MessageResponse(BaseModel):
+    session_id: str = Field(
+        description="Session ID to be used for follow-up messages. Should be returned in every response."
+    )
     question: str | None = Field(
         None, description="Set when agent needs more info from user"
     )
-    result: CodeResult | None = Field(None, description="Set when status=done")
-    session_id: str = Field(
-        description="Session ID to be used for follow-up messages. Should be returned in every response."
+    result: dict[str, Any] | None = Field(
+        None, description="Parsed lua{...}lua output, e.g. {\"key\": \"lua{...}lua\"}. Set when done."
+    )
+    debug: DebugInfo | None = Field(
+        None, description="Present only when LOCALSCRIPT_DEBUG is set"
     )

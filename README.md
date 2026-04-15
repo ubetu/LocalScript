@@ -73,22 +73,9 @@ Swagger UI доступен по адресу: `http://localhost:8000/docs`
   "session_id": "abc123",
   "question": null,
   "result": {
-    "raw_code": "local x = wf.vars.value\nreturn x * 2",
-    "formatted_output": "{\"result\": \"lua{local x = wf.vars.value\nreturn x * 2}lua\"}",
-    "static_result": {
-      "passed": true,
-      "exit_code": 0,
-      "errors": [],
-      "warnings": []
-    },
-    "dynamic_result": {
-      "success": true,
-      "output": "42",
-      "error": null,
-      "line": null,
-      "column": null
-    }
-  }
+    "total": "lua{return wf.vars.price * wf.vars.quantity}lua"
+  },
+  "debug": null
 }
 ```
 
@@ -96,11 +83,11 @@ Swagger UI доступен по адресу: `http://localhost:8000/docs`
 |------|-----|----------|
 | `session_id` | `string` | ID сессии — передавать в следующих запросах |
 | `question` | `string?` | Уточняющий вопрос от агента. Если задан — `result` будет `null` |
-| `result` | `object?` | Результат генерации. Если задан — `question` будет `null` |
-| `result.raw_code` | `string` | Сгенерированный Lua-код без обёртки |
-| `result.formatted_output` | `string` | Готовый вывод в формате `{key: "lua{...}lua"}` |
-| `result.static_result` | `object?` | Результат статической проверки (luacheck) |
-| `result.dynamic_result` | `object?` | Результат динамического запуска кода |
+| `result` | `object?` | Готовый результат: объект вида `{"ключ": "lua{...}lua"}`. Если задан — `question` будет `null` |
+| `debug` | `object?` | Отладочная информация. Присутствует только при `LOCALSCRIPT_DEBUG=1` |
+| `debug.raw_code` | `string` | Сгенерированный Lua-код без обёртки |
+| `debug.static_result` | `object?` | Результат статической проверки (luacheck) |
+| `debug.dynamic_result` | `object?` | Результат динамического запуска кода |
 
 ### Пример использования
 
@@ -154,3 +141,4 @@ curl -X POST http://localhost:8000/generate \
 |------------|--------------|----------|
 | `OLLAMA_HOST` | `http://localhost:11434` | URL Ollama-сервера |
 | `OLLAMA_MODEL` | `qwen2.5-coder:7b-instruct-q6_K` | Модель для генерации кода |
+| `LOCALSCRIPT_DEBUG` | _(не задана)_ | Если задана (любое значение) — включает DEBUG-логирование и добавляет поле `debug` в ответ API |

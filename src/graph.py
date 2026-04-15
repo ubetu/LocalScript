@@ -1,4 +1,5 @@
 import logging
+import os
 import re
 from functools import wraps
 
@@ -25,11 +26,13 @@ from .client import llm_client
 from .lua import LuaCheckResult, LuaRunResult, run_lua, run_luacheck, wrap_lua_code
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-logger.propagate = False
-_handler = logging.StreamHandler()
-_handler.setFormatter(logging.Formatter("%(levelname)s:%(name)s:%(message)s"))
-logger.addHandler(_handler)
+if os.getenv("LOCALSCRIPT_DEBUG"):
+    logger.debug("Debug mode enabled")
+    logger.setLevel(logging.DEBUG)
+    logger.propagate = False
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(levelname)s:%(name)s:%(message)s"))
+    logger.addHandler(handler)
 
 MAX_FIX_TRIES = 15
 
@@ -192,7 +195,15 @@ def build_graph() -> CompiledStateGraph:
     # QA
 
     async def _ask(state: State, system_prompt: str) -> dict:
-        messages = [SystemMessage(system_prompt), *state["messages"]]
+        base_messages = list(state["messages"])
+        possible_input = state.get("possible_input")
+        if possible_input and base_messages:
+            last = base_messages[-1]
+            if isinstance(last, HumanMessage):
+                base_messages[-1] = HumanMessage(
+                    content=f"{last.content}\n\nJSON context:\n{possible_input}"
+                )
+        messages = [SystemMessage(system_prompt), *base_messages]
         logger.debug("_ask ← sending to model:\n%s", _fmt_messages(messages))
         response = await llm_client.with_structured_output(QuestionsSchema).ainvoke(messages)
 
@@ -218,7 +229,7 @@ def build_graph() -> CompiledStateGraph:
 
     @_repeat(times=3)
     async def ask_missing_info(state: State) -> dict:
-        missing = "- JSON context with input variables (wf.vars or wf.initVariables) is not provided"
+        missing = "- JSON контекст с (wf.vars or wf.initVariables) не предоставлен"
         system_prompt = ASK_MISSING_PROMPT.format(missing_description=missing)
         return await _ask(state, system_prompt)
 

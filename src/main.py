@@ -1,4 +1,6 @@
 import json
+import logging
+import os
 import uuid
 
 from fastapi import FastAPI
@@ -8,7 +10,7 @@ from langchain_core.runnables import RunnableConfig
 from .graph import graph
 from .lua import unwrap_lua_code
 from .schema import (
-    CodeResult,
+    DebugInfo,
     LuaCheckResultOut,
     LuaIssueMessageOut,
     LuaIssueOut,
@@ -17,8 +19,9 @@ from .schema import (
     MessageResponse,
 )
 
-import logging
 logging.basicConfig(level=logging.INFO)
+
+_DEBUG = bool(os.getenv("LOCALSCRIPT_DEBUG"))
 
 app = FastAPI(
     title="LocalScript API",
@@ -33,10 +36,7 @@ def _config(session_id: str) -> RunnableConfig:
     return {"configurable": {"thread_id": session_id}}
 
 
-def _to_code_result(state_values: dict) -> CodeResult:
-    raw_code = state_values.get("code") or ""
-    formatted_output = state_values.get("formatted_output") or ""
-
+def _build_debug(state_values: dict) -> DebugInfo:
     static = state_values.get("static_result")
     static_out = None
     if static is not None:
@@ -80,9 +80,8 @@ def _to_code_result(state_values: dict) -> CodeResult:
             column=dynamic.column,
         )
 
-    return CodeResult(
-        raw_code=raw_code,
-        formatted_output=formatted_output,
+    return DebugInfo(
+        raw_code=state_values.get("code") or "",
         static_result=static_out,
         dynamic_result=dynamic_out,
     )
@@ -95,13 +94,16 @@ async def _invoke(session_id: str, graph_input) -> MessageResponse:
 
     if "__interrupt__" in result:
         question = str(result["__interrupt__"][0].value)
-        return MessageResponse(question=question, result=None, session_id=session_id)
+        return MessageResponse(question=question, session_id=session_id)
 
     state = graph.get_state(config)
     if state.next == ():
-        return MessageResponse(result=_to_code_result(state.values), question=None, session_id=session_id)
+        formatted_output = state.values.get("formatted_output") or ""
+        result_dict = json.loads(formatted_output) if formatted_output else None
+        debug = _build_debug(state.values) if _DEBUG else None
+        return MessageResponse(result=result_dict, debug=debug, session_id=session_id)
 
-    return MessageResponse(result=None, question=None, session_id=session_id)
+    return MessageResponse(session_id=session_id)
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
