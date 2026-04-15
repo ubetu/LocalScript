@@ -34,7 +34,7 @@ if os.getenv("LOCALSCRIPT_DEBUG"):
     handler.setFormatter(logging.Formatter("%(levelname)s:%(name)s:%(message)s"))
     logger.addHandler(handler)
 
-MAX_FIX_TRIES = 15
+MAX_FIX_TRIES = 10
 
 
 def build_user_message(
@@ -292,7 +292,7 @@ def build_graph() -> CompiledStateGraph:
         return code_result
 
     async def test(state: State) -> Command:
-        fix_attempts = state.get("fix_attempts", 1)
+        fix_attempts = state.get("fix_attempts", 0) + 1
         logger.info(f"test: attempt {fix_attempts} from {MAX_FIX_TRIES}.")
         if fix_attempts > MAX_FIX_TRIES:
             logger.warning(
@@ -424,7 +424,7 @@ def build_graph() -> CompiledStateGraph:
     builder.add_edge("generate_code", "test")
     builder.add_edge("modify_code", "test")
     builder.add_edge("fix_code", "test")
-    builder.add_edge("reviewev", "fix_code")
+    builder.add_edge("review", "fix_code")
 
     builder.add_edge("format_code", END)
 
