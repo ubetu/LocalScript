@@ -292,6 +292,14 @@ def build_graph() -> CompiledStateGraph:
         return code_result
 
     async def test(state: State) -> Command:
+        fix_attempts = state.get("fix_attempts", 1)
+        logger.info(f"test: attempt {fix_attempts} from {MAX_FIX_TRIES}.")
+        if fix_attempts > MAX_FIX_TRIES:
+            logger.warning(
+                f"test: max fix attempts ({MAX_FIX_TRIES}) reached, going to format_code"
+            )
+            return Command(goto="format_code")
+        
         static_result = None
         try:
             static_result = await run_luacheck(state["code"])  # type: ignore
@@ -325,15 +333,12 @@ def build_graph() -> CompiledStateGraph:
         ):
             logger.info("test: all checks passed, going to review")
             return Command(
-                update={"dynamic_result": dynamic_result},
+                update={"dynamic_result": dynamic_result,
+                        "static_result": static_result,
+                        "fix_attempts": fix_attempts},
                 goto="review",
             )
-        fix_attempts = state.get("fix_attempts", 0) + 1
-        if fix_attempts >= MAX_FIX_TRIES:
-            logger.warning(
-                f"test: max fix attempts ({MAX_FIX_TRIES}) reached, going to format_code"
-            )
-            return Command(goto="format_code")
+
         logger.info(
             f"test: checks failed, going to fix_code (attempt {fix_attempts}/{MAX_FIX_TRIES})"
         )
@@ -366,17 +371,6 @@ def build_graph() -> CompiledStateGraph:
         assert isinstance(response, ReviewResult)
         logger.info(f"review: is_correct={response.is_correct}, concerns={response.concerns}")
         return {"review_result": response}
-
-    def after_review(state: State) -> str:
-        review_result = state.get("review_result")
-        if review_result and not review_result.is_correct:
-            fix_attempts = state.get("fix_attempts", 0)
-            if fix_attempts >= MAX_FIX_TRIES:
-                logger.warning("review: concerns found but max fix attempts reached, proceeding to format")
-                return "format_code"
-            logger.info(f"review: concerns found, routing to fix_code (attempt {fix_attempts}/{MAX_FIX_TRIES})")
-            return "fix_code"
-        return "format_code"
 
     def after_clarify(state: State) -> str:
         if state.get("qa_performed", False):
@@ -430,11 +424,8 @@ def build_graph() -> CompiledStateGraph:
     builder.add_edge("generate_code", "test")
     builder.add_edge("modify_code", "test")
     builder.add_edge("fix_code", "test")
-    builder.add_conditional_edges(
-        "review",
-        after_review,
-        {"fix_code": "fix_code", "format_code": "format_code"},
-    )
+    builder.add_edge("reviewev", "fix_code")
+
     builder.add_edge("format_code", END)
 
     serde = JsonPlusSerializer(allowed_msgpack_modules=[
