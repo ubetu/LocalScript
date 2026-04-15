@@ -269,7 +269,7 @@ def build_graph() -> CompiledStateGraph:
         user_message = build_user_message(
             task=state["task"],
             possible_input=state.get("possible_input"),
-            code=state["code"],
+            code=state.get("code"),
         )
         code_result = await _code(MODIFY_CODE_PROMPT, user_message)
         logger.debug("modify_code → produced code (%d lines)", code_result["code"].count("\n") + 1)
@@ -357,7 +357,7 @@ def build_graph() -> CompiledStateGraph:
         parts = [f"Task: {state['task']}"]
         if state.get("possible_input"):
             parts.append(f"Possible input:\n{state['possible_input']}")
-        parts.append(f"Code:\n```lua\n{state['code']}\n```")
+        parts.append(f"Code:\n```lua\n{state.get('code', 'not provided')}\n```")
 
         dynamic_result = state.get("dynamic_result")
         if dynamic_result and dynamic_result.output:
@@ -379,10 +379,10 @@ def build_graph() -> CompiledStateGraph:
 
     def format_code(state: State) -> dict:
         logger.info(
-            f"format_code: formatting output, code length={len(state['code'])} chars" # type: ignore
+            f"format_code: formatting output, code length={len(state.get('code', ''))} chars" # type: ignore
         )
         key = state.get("json_key") or "result"
-        formatted = wrap_lua_code(key, state['code'])  # type: ignore
+        formatted = wrap_lua_code(key, state.get('code', '')    )  # type: ignore
         logger.info(f"format_code: output={formatted}")
         return {"formatted_output": formatted}
 
