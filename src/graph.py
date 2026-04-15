@@ -424,7 +424,22 @@ def build_graph() -> CompiledStateGraph:
     builder.add_edge("generate_code", "test")
     builder.add_edge("modify_code", "test")
     builder.add_edge("fix_code", "test")
-    builder.add_edge("review", "fix_code")
+    def after_review(state: State) -> str:
+        review_result = state.get("review_result")
+        if review_result and not review_result.is_correct:
+            fix_attempts = state.get("fix_attempts", 0)
+            if fix_attempts >= MAX_FIX_TRIES:
+                logger.warning("review: concerns found but max fix attempts reached, proceeding to format")
+                return "format_code"
+            logger.info(f"review: concerns found, routing to fix_code (attempt {fix_attempts}/{MAX_FIX_TRIES})")
+            return "fix_code"
+        return "format_code"
+
+    builder.add_conditional_edges(
+        "review",
+        after_review,
+        {"fix_code": "fix_code", "format_code": "format_code"},
+    )
 
     builder.add_edge("format_code", END)
 
